@@ -1,0 +1,18 @@
+# Binários Compilados
+# O nome do seu executável (baseado no seu 'module spycode')
+spycode
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Pastas de Ferramentas e IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Arquivos de Log e Temporários
+*.log
+vendor/
