@@ -10,10 +10,19 @@ import (
 var rootCmd = &cobra.Command{
 	Use:   "spycode",
 	Short: "Spycode é um utilitário CLI para extração e empacotamento de código",
-	Long:  `Uma ferramenta modular para gerenciar, rastrear e extrair arquivos de projetos de forma inteligente.`,
+	Long: `Uma ferramenta modular para gerenciar, rastrear e extrair arquivos de projetos de forma inteligente.
+
+Dicas de Autocompletar:
+Para habilitar o [TAB] no terminal, gere o script correspondente ao seu shell.
+Exemplo Linux (Bash):
+  sudo spycode completion bash -o /etc/bash_completion.d/spycode
+  exec bash
+
+Exemplo Termux (Android):
+  spycode completion bash > /data/data/com.termux/files/usr/etc/bash_completion.d/spycode
+  exit (Reinicie a sessão do terminal completamente)`,
 }
 
-// Execute adiciona todos os comandos filhos ao comando raiz e prepara as flags.
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
