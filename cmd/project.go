@@ -31,13 +31,9 @@ var projectCreateCmd = &cobra.Command{
 
 		err = db.Update(func(tx *bbolt.Tx) error {
 			b := tx.Bucket([]byte(storage.BucketProjects))
-			
-			// Checa se já existe para não sobrescrever acidentalmente
 			if b.Get([]byte(projectName)) != nil {
 				return fmt.Errorf("o projeto '%s' já existe", projectName)
 			}
-			
-			// Salvamos o nome como chave. O valor pode ser um JSON de configs futuras.
 			return b.Put([]byte(projectName), []byte("{}"))
 		})
 
@@ -50,7 +46,58 @@ var projectCreateCmd = &cobra.Command{
 	},
 }
 
+var projectListCmd = &cobra.Command{
+	Use:   "list [nome do projeto]",
+	Short: "Lista todos os projetos ou os caminhos rastreados de um projeto específico",
+	Args:  cobra.MaximumNArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		db, err := storage.Open()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Erro ao conectar no banco: %v\n", err)
+			os.Exit(1)
+		}
+		defer db.Close()
+
+		if len(args) == 0 {
+			fmt.Println("Projetos cadastrados:")
+			db.View(func(tx *bbolt.Tx) error {
+				b := tx.Bucket([]byte(storage.BucketProjects))
+				return b.ForEach(func(k, v []byte) error {
+					fmt.Printf("  - %s\n", k)
+					return nil
+				})
+			})
+			return
+		}
+
+		projectName := args[0]
+		fmt.Printf("Alvos rastreados no projeto '%s':\n", projectName)
+		db.View(func(tx *bbolt.Tx) error {
+			filesBucket := tx.Bucket([]byte(storage.BucketFiles))
+			projFiles := filesBucket.Bucket([]byte(projectName))
+			
+			if projFiles == nil {
+				fmt.Println("  (Nenhum arquivo rastreado ou projeto não inicializado)")
+				return nil
+			}
+
+			count := 0
+			projFiles.ForEach(func(k, v []byte) error {
+				fmt.Printf("  - %s\n", k)
+				count++
+				return nil
+			})
+			
+			if count == 0 {
+				fmt.Println("  (Vazio)")
+			}
+			return nil
+		})
+	},
+}
+
 func init() {
 	rootCmd.AddCommand(projectCmd)
 	projectCmd.AddCommand(projectCreateCmd)
+	projectCmd.AddCommand(projectListCmd)
 }
