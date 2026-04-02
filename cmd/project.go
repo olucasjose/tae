@@ -96,8 +96,49 @@ var projectListCmd = &cobra.Command{
 	},
 }
 
+// 1. DEFINIÇÃO do comando delete
+var projectDeleteCmd = &cobra.Command{
+	Use:   "delete <nome>",
+	Short: "Remove um projeto e todo o seu índice de rastreamento",
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		projectName := args[0]
+
+		db, err := storage.Open()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Erro ao conectar no banco: %v\n", err)
+			os.Exit(1)
+		}
+		defer db.Close()
+
+		err = db.Update(func(tx *bbolt.Tx) error {
+			projBucket := tx.Bucket([]byte(storage.BucketProjects))
+			if err := projBucket.Delete([]byte(projectName)); err != nil {
+				return err
+			}
+
+			filesBucket := tx.Bucket([]byte(storage.BucketFiles))
+			if filesBucket.Bucket([]byte(projectName)) != nil {
+				if err := filesBucket.DeleteBucket([]byte(projectName)); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Erro ao deletar projeto: %v\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Printf("Projeto '%s' e seus rastreamentos foram deletados com sucesso.\n", projectName)
+	},
+}
+
 func init() {
 	rootCmd.AddCommand(projectCmd)
 	projectCmd.AddCommand(projectCreateCmd)
 	projectCmd.AddCommand(projectListCmd)
+	// 2. REGISTRO do comando delete
+	projectCmd.AddCommand(projectDeleteCmd) 
 }
