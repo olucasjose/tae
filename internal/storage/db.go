@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	BucketProjects = "Projects"
+	BucketTags = "Tags"
 	BucketFiles    = "Files" // Preparação para a Fase 3
 )
 
@@ -41,7 +41,7 @@ func Open() (*bbolt.DB, error) {
 	}
 
 	err = db.Update(func(tx *bbolt.Tx) error {
-		if _, err := tx.CreateBucketIfNotExists([]byte(BucketProjects)); err != nil {
+		if _, err := tx.CreateBucketIfNotExists([]byte(BucketTags)); err != nil {
 			return err
 		}
 		if _, err := tx.CreateBucketIfNotExists([]byte(BucketFiles)); err != nil {

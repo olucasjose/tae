@@ -10,7 +10,7 @@ import (
 var rootCmd = &cobra.Command{
 	Use:   "tae",
 	Short: "Tae é um utilitário CLI para extração e empacotamento de código",
-	Long: `Uma ferramenta modular para gerenciar, rastrear e extrair arquivos de projetos de forma inteligente.
+	Long: `Uma ferramenta modular para gerenciar, rastrear e extrair arquivos de tags de forma inteligente.
 
 Dicas de Autocompletar:
 Para habilitar o [TAB] no terminal, gere o script correspondente ao seu shell.

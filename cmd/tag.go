@@ -10,17 +10,17 @@ import (
 	"go.etcd.io/bbolt"
 )
 
-var projectCmd = &cobra.Command{
-	Use:   "project",
-	Short: "Gerencia os projetos monitorados pelo Tae",
+var tagCmd = &cobra.Command{
+	Use:   "tag",
+	Short: "Gerencia as tags monitoradas pelo Tae",
 }
 
-var projectCreateCmd = &cobra.Command{
+var tagCreateCmd = &cobra.Command{
 	Use:   "create <nome>",
-	Short: "Cria um novo projeto no banco de dados",
+	Short: "Cria uma nova tag no banco de dados",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		projectName := args[0]
+		tagName := args[0]
 
 		db, err := storage.Open()
 		if err != nil {
@@ -30,11 +30,11 @@ var projectCreateCmd = &cobra.Command{
 		defer db.Close()
 
 		err = db.Update(func(tx *bbolt.Tx) error {
-			b := tx.Bucket([]byte(storage.BucketProjects))
-			if b.Get([]byte(projectName)) != nil {
-				return fmt.Errorf("o projeto '%s' já existe", projectName)
+			b := tx.Bucket([]byte(storage.BucketTags))
+			if b.Get([]byte(tagName)) != nil {
+				return fmt.Errorf("a tag '%s' já existe", tagName)
 			}
-			return b.Put([]byte(projectName), []byte("{}"))
+			return b.Put([]byte(tagName), []byte("{}"))
 		})
 
 		if err != nil {
@@ -42,13 +42,13 @@ var projectCreateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		fmt.Printf("Projeto '%s' criado e pronto para rastrear arquivos.\n", projectName)
+		fmt.Printf("Tag '%s' criada e pronta para rastrear arquivos.\n", tagName)
 	},
 }
 
-var projectListCmd = &cobra.Command{
-	Use:   "list [nome do projeto]",
-	Short: "Lista todos os projetos ou os caminhos rastreados de um projeto específico",
+var tagListCmd = &cobra.Command{
+	Use:   "list [nome da tag]",
+	Short: "Lista todas as tags ou os caminhos rastreados de uma tag específica",
 	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		db, err := storage.Open()
@@ -59,9 +59,9 @@ var projectListCmd = &cobra.Command{
 		defer db.Close()
 
 		if len(args) == 0 {
-			fmt.Println("Projetos cadastrados:")
+			fmt.Println("Tags cadastradas:")
 			db.View(func(tx *bbolt.Tx) error {
-				b := tx.Bucket([]byte(storage.BucketProjects))
+				b := tx.Bucket([]byte(storage.BucketTags))
 				return b.ForEach(func(k, v []byte) error {
 					fmt.Printf("  - %s\n", k)
 					return nil
@@ -70,14 +70,14 @@ var projectListCmd = &cobra.Command{
 			return
 		}
 
-		projectName := args[0]
-		fmt.Printf("Alvos rastreados no projeto '%s':\n", projectName)
+		tagName := args[0]
+		fmt.Printf("Alvos rastreados na tag '%s':\n", tagName)
 		db.View(func(tx *bbolt.Tx) error {
 			filesBucket := tx.Bucket([]byte(storage.BucketFiles))
-			projFiles := filesBucket.Bucket([]byte(projectName))
+			projFiles := filesBucket.Bucket([]byte(tagName))
 			
 			if projFiles == nil {
-				fmt.Println("  (Nenhum arquivo rastreado ou projeto não inicializado)")
+				fmt.Println("  (Nenhum arquivo rastreado ou tag não inicializada)")
 				return nil
 			}
 
@@ -97,12 +97,12 @@ var projectListCmd = &cobra.Command{
 }
 
 // 1. DEFINIÇÃO do comando delete
-var projectDeleteCmd = &cobra.Command{
+var tagDeleteCmd = &cobra.Command{
 	Use:   "delete <nome>",
-	Short: "Remove um projeto e todo o seu índice de rastreamento",
+	Short: "Remove uma tag e todo o seu índice de rastreamento",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		projectName := args[0]
+		tagName := args[0]
 
 		db, err := storage.Open()
 		if err != nil {
@@ -112,14 +112,14 @@ var projectDeleteCmd = &cobra.Command{
 		defer db.Close()
 
 		err = db.Update(func(tx *bbolt.Tx) error {
-			projBucket := tx.Bucket([]byte(storage.BucketProjects))
-			if err := projBucket.Delete([]byte(projectName)); err != nil {
+			projBucket := tx.Bucket([]byte(storage.BucketTags))
+			if err := projBucket.Delete([]byte(tagName)); err != nil {
 				return err
 			}
 
 			filesBucket := tx.Bucket([]byte(storage.BucketFiles))
-			if filesBucket.Bucket([]byte(projectName)) != nil {
-				if err := filesBucket.DeleteBucket([]byte(projectName)); err != nil {
+			if filesBucket.Bucket([]byte(tagName)) != nil {
+				if err := filesBucket.DeleteBucket([]byte(tagName)); err != nil {
 					return err
 				}
 			}
@@ -127,18 +127,18 @@ var projectDeleteCmd = &cobra.Command{
 		})
 
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Erro ao deletar projeto: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Erro ao deletar tag: %v\n", err)
 			os.Exit(1)
 		}
 
-		fmt.Printf("Projeto '%s' e seus rastreamentos foram deletados com sucesso.\n", projectName)
+		fmt.Printf("Tag '%s' e seus rastreamentos foram deletados com sucesso.\n", tagName)
 	},
 }
 
 func init() {
-	rootCmd.AddCommand(projectCmd)
-	projectCmd.AddCommand(projectCreateCmd)
-	projectCmd.AddCommand(projectListCmd)
+	rootCmd.AddCommand(tagCmd)
+	tagCmd.AddCommand(tagCreateCmd)
+	tagCmd.AddCommand(tagListCmd)
 	// 2. REGISTRO do comando delete
-	projectCmd.AddCommand(projectDeleteCmd) 
+	tagCmd.AddCommand(tagDeleteCmd) 
 }

@@ -18,15 +18,15 @@ import (
 var destFlag string
 
 var exportCmd = &cobra.Command{
-	Use:   "export <nome do projeto>",
+	Use:   "export <nome da tag>",
 	Short: "Exporta os arquivos monitorados para um diretório usando concorrência",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		projectName := args[0]
+		tagName := args[0]
 
-		files := getProjectFiles(projectName)
+		files := getTagFiles(tagName)
 		if len(files) == 0 {
-			fmt.Printf("O projeto '%s' não possui arquivos rastreados ou não existe.\n", projectName)
+			fmt.Printf("A tag '%s' não possui arquivos rastreados ou não existe.\n", tagName)
 			os.Exit(1)
 		}
 
@@ -69,7 +69,7 @@ func init() {
 	rootCmd.AddCommand(exportCmd)
 }
 
-func getProjectFiles(projectName string) []string {
+func getTagFiles(tagName string) []string {
 	var files []string
 	db, err := storage.Open()
 	if err != nil {
@@ -83,7 +83,7 @@ func getProjectFiles(projectName string) []string {
 		if filesBucket == nil {
 			return nil
 		}
-		projFiles := filesBucket.Bucket([]byte(projectName))
+		projFiles := filesBucket.Bucket([]byte(tagName))
 		if projFiles == nil {
 			return nil
 		}
@@ -125,7 +125,7 @@ func copyFile(src, dst string) error {
 	}
 	defer sourceFile.Close()
 
-	// Garante que a árvore de subpastas do projeto exista no destino
+	// Garante que a árvore de subpastas da tag exista no destino
 	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
 		return err
 	}

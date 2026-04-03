@@ -7,8 +7,8 @@ import (
 	"go.etcd.io/bbolt"
 )
 
-// TrackPath converte o caminho para absoluto e o insere no sub-bucket do projeto
-func TrackPath(projectName, targetPath string) error {
+// TrackPath converte o caminho para absoluto e o insere no sub-bucket da tag
+func TrackPath(tagName, targetPath string) error {
 	db, err := Open()
 	if err != nil {
 		return err
@@ -21,17 +21,17 @@ func TrackPath(projectName, targetPath string) error {
 	}
 
 	return db.Update(func(tx *bbolt.Tx) error {
-		projBucket := tx.Bucket([]byte(BucketProjects))
-		if projBucket.Get([]byte(projectName)) == nil {
-			return fmt.Errorf("projeto '%s' não existe. Crie-o primeiro com 'tae project create'", projectName)
+		projBucket := tx.Bucket([]byte(BucketTags))
+		if projBucket.Get([]byte(tagName)) == nil {
+			return fmt.Errorf("tag '%s' não existe. Crie-a primeiro com 'tae tag create'", tagName)
 		}
 
 		filesBucket := tx.Bucket([]byte(BucketFiles))
 		
-		// Cria um bucket aninhado com o nome do projeto
-		projFiles, err := filesBucket.CreateBucketIfNotExists([]byte(projectName))
+		// Cria um bucket aninhado com o nome da tag
+		projFiles, err := filesBucket.CreateBucketIfNotExists([]byte(tagName))
 		if err != nil {
-			return fmt.Errorf("falha ao estruturar bucket do projeto: %w", err)
+			return fmt.Errorf("falha ao estruturar bucket da tag: %w", err)
 		}
 
 		// O valor vazio ("1") é um placeholder. No futuro, armazenaremos hashes aqui.
@@ -39,8 +39,8 @@ func TrackPath(projectName, targetPath string) error {
 	})
 }
 
-// UntrackPath remove um caminho do sub-bucket do projeto
-func UntrackPath(projectName, targetPath string) error {
+// UntrackPath remove um caminho do sub-bucket da tag
+func UntrackPath(tagName, targetPath string) error {
 	db, err := Open()
 	if err != nil {
 		return err
@@ -57,9 +57,9 @@ func UntrackPath(projectName, targetPath string) error {
 		if filesBucket == nil {
 			return nil
 		}
-		projFiles := filesBucket.Bucket([]byte(projectName))
+		projFiles := filesBucket.Bucket([]byte(tagName))
 		if projFiles == nil {
-			return fmt.Errorf("projeto '%s' não possui arquivos rastreados ou não existe", projectName)
+			return fmt.Errorf("tag '%s' não possui arquivos rastreados ou não existe", tagName)
 		}
 
 		return projFiles.Delete([]byte(absPath))
