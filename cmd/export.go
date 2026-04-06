@@ -15,14 +15,13 @@ import (
 	"go.etcd.io/bbolt"
 )
 
-var destFlag string
-
 var exportCmd = &cobra.Command{
-	Use:   "export <nome da tag>",
-	Short: "Exporta os arquivos monitorados para um diretório usando concorrência",
-	Args:  cobra.ExactArgs(1),
+	Use:   "export <nome da tag> <destino>",
+	Short: "Exporta os arquivos monitorados para um diretório de destino",
+	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		tagName := args[0]
+		destPath := args[1]
 
 		files := getTagFiles(tagName)
 		if len(files) == 0 {
@@ -30,42 +29,34 @@ var exportCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		if err := os.MkdirAll(destFlag, 0755); err != nil {
+		if err := os.MkdirAll(destPath, 0755); err != nil {
 			fmt.Fprintf(os.Stderr, "Erro ao criar destino: %v\n", err)
 			os.Exit(1)
 		}
 
-		// Calcula a raiz comum para não copiar árvores de diretórios inteiras do SO
 		basePrefix := getCommonPrefix(files)
-
 		numWorkers := runtime.NumCPU()
-		fmt.Printf("Iniciando exportação de %d arquivo(s) com %d worker(s)...\n", len(files), numWorkers)
+		fmt.Printf("Iniciando exportação de %d arquivo(s) para '%s' com %d worker(s)...\n", len(files), destPath, numWorkers)
 
-		// Channel para distribuir o trabalho (Buffered)
 		jobs := make(chan string, len(files))
 		var wg sync.WaitGroup
 
-		// 1. Inicializa o Pool de Goroutines
 		for i := 0; i < numWorkers; i++ {
 			wg.Add(1)
-			go worker(jobs, &wg, basePrefix, destFlag)
+			go worker(jobs, &wg, basePrefix, destPath)
 		}
 
-		// 2. Alimenta os channels
 		for _, file := range files {
 			jobs <- file
 		}
-		close(jobs) // Sinaliza aos workers que não há mais jobs
+		close(jobs)
 
-		// 3. Bloqueia até que todos os workers terminem o I/O
 		wg.Wait()
-		fmt.Printf("\nSucesso! Arquivos exportados para a pasta '%s'.\n", destFlag)
+		fmt.Printf("\nSucesso! Arquivos exportados para a pasta '%s'.\n", destPath)
 	},
 }
 
 func init() {
-	exportCmd.Flags().StringVarP(&destFlag, "dest", "d", "", "Diretório de destino (obrigatório)")
-	exportCmd.MarkFlagRequired("dest")
 	rootCmd.AddCommand(exportCmd)
 }
 
@@ -99,11 +90,9 @@ func getTagFiles(tagName string) []string {
 func worker(jobs <-chan string, wg *sync.WaitGroup, basePrefix, dest string) {
 	defer wg.Done()
 	for path := range jobs {
-		// Remove o prefixo para obter um caminho relativo ao destino
 		relPath := strings.TrimPrefix(path, basePrefix)
 		relPath = strings.TrimPrefix(relPath, string(filepath.Separator))
 
-		// Fallback caso seja um único arquivo na raiz sem diretório pai claro
 		if relPath == "" {
 			relPath = filepath.Base(path)
 		}
@@ -125,7 +114,6 @@ func copyFile(src, dst string) error {
 	}
 	defer sourceFile.Close()
 
-	// Garante que a árvore de subpastas da tag exista no destino
 	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
 		return err
 	}
