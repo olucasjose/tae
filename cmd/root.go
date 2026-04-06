@@ -15,7 +15,9 @@ var rootCmd = &cobra.Command{
 Dicas de Autocompletar:
 Para habilitar o [TAB] no terminal, gere o script correspondente ao seu shell.
 Exemplo Linux (Bash):
-  sudo tae completion bash -o /etc/bash_completion.d/tae
+  tae completion bash | sudo tee /etc/bash_completion.d/tae > /dev/null
+  # ou
+  sudo sh -c 'tae completion bash > /etc/bash_completion.d/tae'
   exec bash
 
 Exemplo Termux (Android):
