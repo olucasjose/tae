@@ -20,6 +20,7 @@ import (
 var (
 	exportZip   bool
 	exportLimit int
+	exportMerge bool
 )
 
 var exportCmd = &cobra.Command{
@@ -62,7 +63,7 @@ var exportCmd = &cobra.Command{
 		numWorkers := runtime.NumCPU()
 
 		if exportZip {
-			chunks := grouper.GroupFiles(files, exportLimit, tagName)
+			chunks := grouper.GroupFiles(files, exportLimit, tagName, exportMerge)
 			fmt.Printf("Iniciando exportação em ZIP. %d arquivo(s) expandido(s) divididos em %d lote(s) para '%s'...\n", len(files), len(chunks), destPath)
 
 			jobs := make(chan grouper.ExportChunk, len(chunks))
@@ -105,6 +106,7 @@ var exportCmd = &cobra.Command{
 func init() {
 	exportCmd.Flags().BoolVarP(&exportZip, "zip", "z", false, "Exporta e compacta os arquivos em formato .zip")
 	exportCmd.Flags().IntVarP(&exportLimit, "limit", "l", 0, "Teto máximo de arquivos por zip (requer -z)")
+	exportCmd.Flags().BoolVarP(&exportMerge, "merge", "m", false, "Mescla zips subpopulados sequencialmente mantendo o limite (requer -z e -l)")
 	rootCmd.AddCommand(exportCmd)
 }
 

@@ -36,7 +36,8 @@ type ExportChunk struct {
 	Files   []string
 }
 
-func GroupFiles(files []string, limit int, baseName string) []ExportChunk {
+// GroupFiles gera os lotes fatiados. Se merge=true, aciona a fusão de blocos subpopulados.
+func GroupFiles(files []string, limit int, baseName string, merge bool) []ExportChunk {
 	if limit <= 0 || len(files) <= limit {
 		return []ExportChunk{{ZipName: fmt.Sprintf("%s.zip", baseName), Files: files}}
 	}
@@ -50,7 +51,6 @@ func GroupFiles(files []string, limit int, baseName string) []ExportChunk {
 	allocate = func(node *Node, prefix string, activeChunk *Chunk) *Chunk {
 		sort.Strings(node.Files)
 		
-		// 1. Processa arquivos da raiz do nó
 		for _, f := range node.Files {
 			if len(activeChunk.Files) >= limit {
 				chunks = append(chunks, activeChunk)
@@ -59,14 +59,12 @@ func GroupFiles(files []string, limit int, baseName string) []ExportChunk {
 			activeChunk.Files = append(activeChunk.Files, f)
 		}
 
-		// 2. Extrai e ordena subdiretórios (garante determinismo)
 		var dirNames []string
 		for d := range node.SubDirs {
 			dirNames = append(dirNames, d)
 		}
 		sort.Strings(dirNames)
 
-		// 3. Avalia coesão dos subdiretórios
 		for _, dName := range dirNames {
 			subNode := node.SubDirs[dName]
 			
@@ -76,14 +74,11 @@ func GroupFiles(files []string, limit int, baseName string) []ExportChunk {
 			}
 
 			if len(activeChunk.Files)+subNode.TotalFiles() <= limit {
-				// Cabe inteiro. Passa o chunk atual adiante para ser preenchido e recebe ele de volta.
 				activeChunk = allocate(subNode, prefix, activeChunk)
 			} else {
-				// Não cabe. Isola em um novo fluxo de chunk para não poluir o chunk pai.
 				childChunk := &Chunk{Prefix: nodePrefix}
 				finalChildChunk := allocate(subNode, nodePrefix, childChunk)
 				
-				// Se restarem arquivos no fluxo isolado, anexa aos resultados finais.
 				if len(finalChildChunk.Files) > 0 {
 					chunks = append(chunks, finalChildChunk)
 				}
@@ -92,13 +87,53 @@ func GroupFiles(files []string, limit int, baseName string) []ExportChunk {
 		return activeChunk
 	}
 
-	// Inicia a alocação da raiz
 	finalChunk := allocate(root, baseName, &Chunk{Prefix: baseName})
 	if len(finalChunk.Files) > 0 {
 		chunks = append(chunks, finalChunk)
 	}
 
-	return formatChunkNames(chunks)
+	exports := formatChunkNames(chunks)
+
+	if merge {
+		return mergeBlocks(exports, limit, baseName)
+	}
+
+	return exports
+}
+
+// mergeBlocks aplica a heurística Next-Fit em pós-processamento preservando limites e nomes
+func mergeBlocks(chunks []ExportChunk, limit int, baseName string) []ExportChunk {
+	if len(chunks) <= 1 {
+		return chunks
+	}
+
+	var merged []ExportChunk
+	current := chunks[0]
+
+	stripZip := func(s string) string { return strings.TrimSuffix(s, ".zip") }
+
+	for i := 1; i < len(chunks); i++ {
+		next := chunks[i]
+		
+		if len(current.Files)+len(next.Files) <= limit {
+			current.Files = append(current.Files, next.Files...)
+			
+			cName := stripZip(current.ZipName)
+			nName := stripZip(next.ZipName)
+			
+			// Sanitiza o prefixo base para o nome final não ficar colossal
+			cleanNext := strings.TrimPrefix(nName, baseName+"_")
+			if cleanNext == baseName {
+				cleanNext = "root"
+			}
+			current.ZipName = fmt.Sprintf("%s+%s.zip", cName, cleanNext)
+		} else {
+			merged = append(merged, current)
+			current = next
+		}
+	}
+	merged = append(merged, current)
+	return merged
 }
 
 func formatChunkNames(chunks []*Chunk) []ExportChunk {

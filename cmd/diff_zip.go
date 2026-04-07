@@ -18,7 +18,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var diffLimit int
+var (
+	diffLimit int
+	diffMerge bool
+)
 
 var diffZipCmd = &cobra.Command{
 	Use:   "diff-zip <commit1> <commit2>",
@@ -40,7 +43,7 @@ var diffZipCmd = &cobra.Command{
 		baseName := fmt.Sprintf("git_changes_%s", timestamp)
 		basePrefix := getCommonPrefix(files)
 
-		chunks := grouper.GroupFiles(files, diffLimit, baseName)
+		chunks := grouper.GroupFiles(files, diffLimit, baseName, diffMerge)
 		fmt.Printf("\nIniciando empacotamento de %d arquivo(s) em %d lote(s)...\n", len(files), len(chunks))
 
 		numWorkers := runtime.NumCPU()
@@ -64,6 +67,7 @@ var diffZipCmd = &cobra.Command{
 
 func init() {
 	diffZipCmd.Flags().IntVarP(&diffLimit, "limit", "l", 0, "Teto máximo de arquivos por zip")
+	diffZipCmd.Flags().BoolVarP(&diffMerge, "merge", "m", false, "Mescla zips subpopulados sequencialmente mantendo o limite (requer -l)")
 	rootCmd.AddCommand(diffZipCmd)
 }
 
