@@ -11,19 +11,15 @@ import (
 )
 
 var deleteCmd = &cobra.Command{
-	Use:   "delete <nome>",
-	Short: "Remove uma tag e todo o seu índice de rastreamento",
-	Args:  cobra.ExactArgs(1),
+	Use:   "delete <nome1> [nome2...]",
+	Short: "Remove uma ou mais tags e todo o seu índice de rastreamento",
+	Args:  cobra.MinimumNArgs(1),
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		if len(args) != 0 {
-			return nil, cobra.ShellCompDirectiveNoFileComp
-		}
 		tags, _ := storage.GetAllTags()
+		// Retirada a restrição de len(args) != 0 para continuar sugerindo tags
 		return tags, cobra.ShellCompDirectiveNoFileComp
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		tagName := args[0]
-
 		db, err := storage.Open()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Erro ao conectar no banco: %v\n", err)
@@ -31,27 +27,35 @@ var deleteCmd = &cobra.Command{
 		}
 		defer db.Close()
 
+		// Transação única para deletar múltiplas tags em lote
 		err = db.Update(func(tx *bbolt.Tx) error {
 			projBucket := tx.Bucket([]byte(storage.BucketTags))
-			if err := projBucket.Delete([]byte(tagName)); err != nil {
-				return err
-			}
-
 			filesBucket := tx.Bucket([]byte(storage.BucketFiles))
-			if filesBucket.Bucket([]byte(tagName)) != nil {
-				if err := filesBucket.DeleteBucket([]byte(tagName)); err != nil {
-					return err
+
+			for _, tagName := range args {
+				// Deleta a referência da tag
+				if projBucket.Get([]byte(tagName)) != nil {
+					if err := projBucket.Delete([]byte(tagName)); err != nil {
+						return fmt.Errorf("falha ao remover referência da tag '%s': %w", tagName, err)
+					}
+				}
+
+				// Deleta o bucket de arquivos rastreados associados à tag
+				if filesBucket.Bucket([]byte(tagName)) != nil {
+					if err := filesBucket.DeleteBucket([]byte(tagName)); err != nil {
+						return fmt.Errorf("falha ao remover rastreamento da tag '%s': %w", tagName, err)
+					}
 				}
 			}
 			return nil
 		})
 
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Erro ao deletar tag: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Erro ao deletar tags: %v\n", err)
 			os.Exit(1)
 		}
 
-		fmt.Printf("Tag '%s' e seus rastreamentos foram deletados com sucesso.\n", tagName)
+		fmt.Printf("Tags deletadas com sucesso: %v\n", args)
 	},
 }
 
