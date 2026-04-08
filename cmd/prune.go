@@ -13,7 +13,11 @@ import (
 	"go.etcd.io/bbolt"
 )
 
-var pruneAll bool
+var (
+	pruneAll     bool
+	pruneDryRun  bool
+	pruneVerbose bool
+)
 
 var pruneCmd = &cobra.Command{
 	Use:   "prune [nome1] [nome2...]",
@@ -45,7 +49,7 @@ var pruneCmd = &cobra.Command{
 			if pruneAll {
 				tagsBucket := tx.Bucket([]byte(storage.BucketTags))
 				if tagsBucket != nil {
-					tagsBucket.ForEach(func(k, v []byte) error {
+					_ = tagsBucket.ForEach(func(k, v []byte) error {
 						targetTags = append(targetTags, string(k))
 						return nil
 					})
@@ -68,7 +72,7 @@ var pruneCmd = &cobra.Command{
 				var keysToDelete [][]byte
 
 				// Identificação Fail-Fast: os.Stat acusa IsNotExist
-				projFiles.ForEach(func(k, v []byte) error {
+				_ = projFiles.ForEach(func(k, v []byte) error {
 					path := string(k)
 					if _, err := os.Stat(path); os.IsNotExist(err) {
 						keysToDelete = append(keysToDelete, k)
@@ -76,26 +80,45 @@ var pruneCmd = &cobra.Command{
 					return nil
 				})
 
-				// Deleção segura e isolada da iteração
-				for _, k := range keysToDelete {
-					if err := projFiles.Delete(k); err != nil {
-						return fmt.Errorf("falha ao remover chave interna '%s': %w", string(k), err)
-					}
-					totalPruned++
-				}
-				
 				if len(keysToDelete) > 0 {
-					fmt.Printf("Tag '%s': %d arquivo(s) fantasma(s) removido(s).\n", tagName, len(keysToDelete))
+					actionMsg := "removido(s)"
+					if pruneDryRun {
+						actionMsg = "pronto(s) para remoção (simulação)"
+					}
+					
+					fmt.Printf("Tag '%s': %d arquivo(s) fantasma(s) %s.\n", tagName, len(keysToDelete), actionMsg)
+
+					// Exibe os caminhos exatos se Verbose ou Dry-Run estiverem ativos
+					if pruneVerbose || pruneDryRun {
+						for _, k := range keysToDelete {
+							fmt.Printf("  - %s\n", string(k))
+						}
+					}
+				}
+
+				// Realiza a deleção apenas se NÃO for uma simulação
+				if !pruneDryRun {
+					for _, k := range keysToDelete {
+						if err := projFiles.Delete(k); err != nil {
+							return fmt.Errorf("falha ao remover chave interna '%s': %w", string(k), err)
+						}
+						totalPruned++
+					}
+				} else {
+					// Apenas para contabilizar no log final sem deletar
+					totalPruned += len(keysToDelete)
 				}
 			}
 
 			if totalPruned == 0 {
 				fmt.Println("Nenhum arquivo fantasma encontrado. O rastreamento está atualizado.")
-			} else {
+			} else if !pruneDryRun {
 				fmt.Printf("\nTotal podado do banco de dados: %d arquivo(s).\n", totalPruned)
+			} else {
+				fmt.Printf("\nTotal detectado na simulação: %d arquivo(s).\n", totalPruned)
 			}
 
-			return nil
+			return nil // O bbolt finaliza a transação silenciosamente se não houve mutações no dry-run
 		})
 
 		if err != nil {
@@ -107,5 +130,7 @@ var pruneCmd = &cobra.Command{
 
 func init() {
 	pruneCmd.Flags().BoolVarP(&pruneAll, "all", "a", false, "Aplica a verificação e limpeza em todas as tags cadastradas")
+	pruneCmd.Flags().BoolVarP(&pruneDryRun, "dry-run", "d", false, "Apenas exibe os arquivos fantasmas sem removê-los do banco de dados")
+	pruneCmd.Flags().BoolVarP(&pruneVerbose, "verbose", "V", false, "Exibe os caminhos absolutos dos arquivos afetados durante a limpeza")
 	rootCmd.AddCommand(pruneCmd)
 }
