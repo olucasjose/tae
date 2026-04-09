@@ -15,6 +15,7 @@ import (
 	"sync"
 
 	"tae/internal/grouper"
+    "tae/internal/render"
 
 	"github.com/spf13/cobra"
 )
@@ -58,7 +59,7 @@ var gitExportCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		basePrefix := getCommonPrefix(files)
+		basePrefix := render.GetCommonPrefix(files)
 		numWorkers := runtime.NumCPU()
 
 		if gitExportZip {

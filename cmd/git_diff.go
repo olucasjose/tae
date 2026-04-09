@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"tae/internal/grouper"
+    "tae/internal/render"
 
 	"github.com/spf13/cobra"
 )
@@ -41,8 +42,8 @@ var gitDiffCmd = &cobra.Command{
 
 		timestamp := time.Now().Format("20060102_150405")
 		repoName := getGitRepoName()
-		baseName := fmt.Sprintf("%s-diff-%s", repoName, timestamp)""
-		basePrefix := getCommonPrefix(files)
+		baseName := fmt.Sprintf("%s-diff-%s", repoName, timestamp)
+		basePrefix := render.GetCommonPrefix(files)
 
 		chunks := grouper.GroupFiles(files, diffLimit, baseName, diffMerge)
 		fmt.Printf("\nIniciando empacotamento de %d arquivo(s) em %d lote(s)...\n", len(files), len(chunks))

@@ -15,6 +15,7 @@ import (
 
 	"tae/internal/grouper"
 	"tae/internal/storage"
+    "tae/internal/render"
 
 	"github.com/spf13/cobra"
 	"go.etcd.io/bbolt"
@@ -62,7 +63,7 @@ var exportCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		basePrefix := getCommonPrefix(files)
+		basePrefix := render.GetCommonPrefix(files)
 		numWorkers := runtime.NumCPU()
 
 		if exportZip {
@@ -275,33 +276,4 @@ func copySingleFile(src, dst string) error {
 
 	_, err = io.Copy(destFile, sourceFile)
 	return err
-}
-
-func getCommonPrefix(paths []string) string {
-	if len(paths) == 0 {
-		return ""
-	}
-	if len(paths) == 1 {
-		return filepath.Dir(paths[0]) + string(filepath.Separator)
-	}
-
-	prefix := strings.Split(paths[0], string(filepath.Separator))
-
-	for _, p := range paths[1:] {
-		parts := strings.Split(p, string(filepath.Separator))
-		limit := len(prefix)
-		if len(parts) < limit {
-			limit = len(parts)
-		}
-
-		var i int
-		for i = 0; i < limit; i++ {
-			if prefix[i] != parts[i] {
-				break
-			}
-		}
-		prefix = prefix[:i]
-	}
-
-	return strings.Join(prefix, string(filepath.Separator)) + string(filepath.Separator)
 }
