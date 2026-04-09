@@ -4,8 +4,10 @@
 package cmd
 
 import (
+	"bufio"
 	"fmt"
 	"os"
+	"strings"
 
 	"tae/internal/storage"
 
@@ -14,9 +16,10 @@ import (
 )
 
 var (
-	pruneAll     bool
-	pruneDryRun  bool
-	pruneVerbose bool
+	pruneAll   bool
+	pruneList  bool
+	pruneForce bool
+	pruneQuiet bool
 )
 
 var pruneCmd = &cobra.Command{
@@ -28,7 +31,12 @@ var pruneCmd = &cobra.Command{
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(args) == 0 && !pruneAll {
-			fmt.Fprintln(os.Stderr, "Erro: Informe pelo menos uma tag ou use a flag --all (-a) para atualizar todas.")
+			fmt.Fprintln(os.Stderr, "Erro: Informe pelo menos uma tag ou use a flag --all (-a) para atuar em todas.")
+			os.Exit(1)
+		}
+
+		if pruneQuiet && !pruneForce && !pruneList {
+			fmt.Fprintln(os.Stderr, "Erro: A flag --quiet (-q) exige o uso de --force (-f) para evitar que o terminal aguarde confirmação invisivelmente.")
 			os.Exit(1)
 		}
 
@@ -39,7 +47,11 @@ var pruneCmd = &cobra.Command{
 		}
 		defer db.Close()
 
-		err = db.Update(func(tx *bbolt.Tx) error {
+		ghostsByTag := make(map[string][][]byte)
+		totalGhosts := 0
+
+		// Etapa 1: Escaneamento (View transacional - Não bloqueia o banco)
+		err = db.View(func(tx *bbolt.Tx) error {
 			filesBucket := tx.Bucket([]byte(storage.BucketFiles))
 			if filesBucket == nil {
 				return nil
@@ -58,79 +70,110 @@ var pruneCmd = &cobra.Command{
 				targetTags = args
 			}
 
-			totalPruned := 0
-
 			for _, tagName := range targetTags {
 				projFiles := filesBucket.Bucket([]byte(tagName))
 				if projFiles == nil {
-					if !pruneAll {
+					if !pruneAll && !pruneQuiet {
 						fmt.Printf("Aviso: Tag '%s' não encontrada ou sem arquivos rastreados.\n", tagName)
 					}
 					continue
 				}
 
-				var keysToDelete [][]byte
-
-				// Identificação Fail-Fast: os.Stat acusa IsNotExist
 				_ = projFiles.ForEach(func(k, v []byte) error {
 					path := string(k)
+					// Identificação Fail-Fast
 					if _, err := os.Stat(path); os.IsNotExist(err) {
-						keysToDelete = append(keysToDelete, k)
+						ghostsByTag[tagName] = append(ghostsByTag[tagName], k)
+						totalGhosts++
 					}
 					return nil
 				})
-
-				if len(keysToDelete) > 0 {
-					actionMsg := "removido(s)"
-					if pruneDryRun {
-						actionMsg = "pronto(s) para remoção (simulação)"
-					}
-					
-					fmt.Printf("Tag '%s': %d arquivo(s) fantasma(s) %s.\n", tagName, len(keysToDelete), actionMsg)
-
-					// Exibe os caminhos exatos se Verbose ou Dry-Run estiverem ativos
-					if pruneVerbose || pruneDryRun {
-						for _, k := range keysToDelete {
-							fmt.Printf("  - %s\n", string(k))
-						}
-					}
-				}
-
-				// Realiza a deleção apenas se NÃO for uma simulação
-				if !pruneDryRun {
-					for _, k := range keysToDelete {
-						if err := projFiles.Delete(k); err != nil {
-							return fmt.Errorf("falha ao remover chave interna '%s': %w", string(k), err)
-						}
-						totalPruned++
-					}
-				} else {
-					// Apenas para contabilizar no log final sem deletar
-					totalPruned += len(keysToDelete)
-				}
 			}
-
-			if totalPruned == 0 {
-				fmt.Println("Nenhum arquivo fantasma encontrado. O rastreamento está atualizado.")
-			} else if !pruneDryRun {
-				fmt.Printf("\nTotal podado do banco de dados: %d arquivo(s).\n", totalPruned)
-			} else {
-				fmt.Printf("\nTotal detectado na simulação: %d arquivo(s).\n", totalPruned)
-			}
-
-			return nil // O bbolt finaliza a transação silenciosamente se não houve mutações no dry-run
+			return nil
 		})
 
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Erro fatal na transação de limpeza: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Erro durante a leitura do banco de dados: %v\n", err)
 			os.Exit(1)
+		}
+
+		// Etapa 2: Exibição e Interação
+		if totalGhosts == 0 {
+			if !pruneQuiet {
+				fmt.Println("Nenhum arquivo fantasma encontrado. O rastreamento está atualizado.")
+			}
+			return
+		}
+
+		if !pruneQuiet {
+			for tagName, keys := range ghostsByTag {
+				if len(keys) > 0 {
+					fmt.Printf("Tag '%s': %d arquivo(s) fantasma(s) detectado(s).\n", tagName, len(keys))
+					for _, k := range keys {
+						fmt.Printf("  - %s\n", string(k))
+					}
+				}
+			}
+		}
+
+		if pruneList {
+			if !pruneQuiet {
+				fmt.Printf("\nTotal detectado: %d arquivo(s).\n", totalGhosts)
+			}
+			return
+		}
+
+		if !pruneForce {
+			fmt.Printf("\nDeseja remover %d arquivo(s) fantasma(s) permanentemente do índice? [s/N]: ", totalGhosts)
+			reader := bufio.NewReader(os.Stdin)
+			response, _ := reader.ReadString('\n')
+			response = strings.TrimSpace(strings.ToLower(response))
+			if response != "s" && response != "y" {
+				fmt.Println("Operação cancelada.")
+				return
+			}
+		}
+
+		// Etapa 3: Execução Destrutiva
+		err = db.Update(func(tx *bbolt.Tx) error {
+			filesBucket := tx.Bucket([]byte(storage.BucketFiles))
+			if filesBucket == nil {
+				return nil
+			}
+
+			for tagName, keys := range ghostsByTag {
+				if len(keys) == 0 {
+					continue
+				}
+				projFiles := filesBucket.Bucket([]byte(tagName))
+				if projFiles == nil {
+					continue // Condição de corrida: apagaram a tag durante o prompt
+				}
+
+				for _, k := range keys {
+					if err := projFiles.Delete(k); err != nil {
+						return fmt.Errorf("falha ao remover chave interna '%s': %w", string(k), err)
+					}
+				}
+			}
+			return nil
+		})
+
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Erro fatal na transação de deleção: %v\n", err)
+			os.Exit(1)
+		}
+
+		if !pruneQuiet {
+			fmt.Printf("Sucesso! %d arquivo(s) fantasma(s) removido(s).\n", totalGhosts)
 		}
 	},
 }
 
 func init() {
-	pruneCmd.Flags().BoolVarP(&pruneAll, "all", "a", false, "Aplica a verificação e limpeza em todas as tags cadastradas")
-	pruneCmd.Flags().BoolVarP(&pruneDryRun, "dry-run", "d", false, "Apenas exibe os arquivos fantasmas sem removê-los do banco de dados")
-	pruneCmd.Flags().BoolVarP(&pruneVerbose, "verbose", "V", false, "Exibe os caminhos absolutos dos arquivos afetados durante a limpeza")
+	pruneCmd.Flags().BoolVarP(&pruneAll, "all", "a", false, "Aplica a verificação em todas as tags cadastradas")
+	pruneCmd.Flags().BoolVarP(&pruneList, "list", "l", false, "Apenas lista os arquivos fantasmas sem removê-los")
+	pruneCmd.Flags().BoolVarP(&pruneForce, "force", "f", false, "Força a exclusão sem solicitar confirmação do usuário")
+	pruneCmd.Flags().BoolVarP(&pruneQuiet, "quiet", "q", false, "Oculta a saída no terminal (requer -f ou -l)")
 	rootCmd.AddCommand(pruneCmd)
 }
