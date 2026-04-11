@@ -44,7 +44,7 @@ func IgnorePaths(tagName string, targets []string) error {
 		if err != nil {
 			return err
 		}
-		
+
 		projIgnored, err := ignoredBucket.CreateBucketIfNotExists([]byte(tagName))
 		if err != nil {
 			return err
@@ -90,4 +90,41 @@ func GetIgnoredPaths(tagName string) (map[string]bool, error) {
 		})
 	})
 	return ignored, err
+}
+
+// UnignorePaths remove alvos da blacklist, devolvendo-os ao fluxo de herança original.
+func UnignorePaths(tagName string, targets []string) error {
+	db, err := Open()
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	var absTargets []string
+	for _, t := range targets {
+		absPath, err := filepath.Abs(t)
+		if err != nil {
+			return fmt.Errorf("caminho inválido '%s': %w", t, err)
+		}
+		absTargets = append(absTargets, absPath)
+	}
+
+	return db.Update(func(tx *bbolt.Tx) error {
+		ignoredBucket := tx.Bucket([]byte(BucketIgnored))
+		if ignoredBucket == nil {
+			return nil // Se não existe bucket, não há o que des-ignorar
+		}
+
+		projIgnored := ignoredBucket.Bucket([]byte(tagName))
+		if projIgnored == nil {
+			return nil
+		}
+
+		for _, absPath := range absTargets {
+			if err := projIgnored.Delete([]byte(absPath)); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
