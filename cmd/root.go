@@ -12,7 +12,7 @@ import (
 
 var rootCmd = &cobra.Command{
 	Use:     "tae",
-	Version: "4.0.1-debug",
+	Version: "4.1.0",
 	Short:   "Tae é um utilitário CLI para extração e empacotamento de código",
 	Long: `Tae (Tracker and Exporter) é uma ferramenta CLI modular para gerenciar, 
 rastrear e extrair arquivos no disco.
@@ -37,6 +37,11 @@ Exemplo Termux (Android):
   tae create "patch_v1" "patch_v2"
   tae track ./src/main.go ./configs/ "patch_v1"
 
+  # Gerenciar Blacklist Permanente (Exclusion Index)
+  tae ignore ./configs/secrets.json "patch_v1"
+  tae ignore -r ./configs/secrets.json "patch_v1"
+  tae list "patch_v1" --ignored
+
   # Manutenção e Limpeza (Arquivos deletados do disco)
   tae prune "patch_v1"
   tae prune --all --list
@@ -53,10 +58,8 @@ Exemplo Termux (Android):
 }
 
 func init() {
-	// Desativa o comando "completion" automático (já documentamos isso no Long)
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
 
-	// Sobrescreve o template padrão do Cobra traduzindo os termos e tratando o comando "help"
 	rootCmd.SetUsageTemplate(`Uso:{{if .Runnable}}
   {{.UseLine}}{{end}}{{if .HasAvailableSubCommands}}
   {{.CommandPath}} [comando]{{end}}{{if .HasExample}}

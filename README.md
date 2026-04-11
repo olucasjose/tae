@@ -29,14 +29,18 @@ O fluxo principal baseia-se em: **Criar uma Tag** -> **Rastrear Arquivos** -> **
    ```bash
    tae track src/handlers/ api/routes.go patch_1.2
    ```
-   *Para ignorar padrões específicos:*
+   *Se quiser que um arquivo interno de uma pasta rastreada NÂO seja exportado, coloque-o na blacklist permanente da tag:*
    ```bash
-   tae track frontend/ -i "node_modules|*.tmp" patch_1.2
+   tae ignore src/handlers/dev_test.go patch_1.2
    ```
 
 3. **Verificar os arquivos que estão na tag:**
    ```bash
    tae list patch_1.2
+   ```
+   *Para auditar a blacklist:*
+   ```bash
+   tae list patch_1.2 --ignored
    ```
 
 4. **Exportar a tag mantendo a hierarquia de pastas (para `./saida`):**
@@ -52,14 +56,15 @@ O fluxo principal baseia-se em: **Criar uma Tag** -> **Rastrear Arquivos** -> **
 |---|---|---|
 | `create <tags>...` | Cria novos contextos (tags) vazios no banco de dados. | `tae create refactor fix` |
 | `delete <tags>...` | Remove uma ou mais tags e todo o seu índice de rastreamento. | `tae delete tag1 tag2` |
-| `list [tag]` | Lista tags cadastradas ou alvos rastreados. Suporta árvore visual (`-t`), limite de nível (`-L`), ignorar padrões (`-I`) e expansão de pastas (`-e`). | `tae list refactor -t -L 2 -e` |
-| `track <alvos> <tag>` | Adiciona arquivos/pastas ao monitoramento da tag. Suporta filtro de ignorar `-i`. | `tae track ./cmd/ meu_app` |
-| `untrack <alvos> <tag>`| Remove arquivos/pastas específicos do monitoramento de uma tag. | `tae untrack ./cmd/main.go meu_app` |
+| `list [tag]` | Lista alvos rastreados. Suporta árvore visual (`-t`), profundidade (`-L`), filtro (`-I`), expansão de pastas (`-e`) e dump de exclusões (`-i` / `--ignored`). | `tae list refactor -t -e` |
+| `track <alvos> <tag>` | Adiciona arquivos/pastas ao monitoramento explícito da tag. | `tae track ./cmd/ meu_app` |
+| `untrack <alvos> <tag>`| Remove arquivos/pastas específicos do monitoramento explícito. | `tae untrack ./cmd/ meu_app` |
+| `ignore <alvos> <tag>` | Adiciona arquivos à blacklist (Exclusion Index) para silenciá-los. Use `-r` para remover da blacklist. | `tae ignore ./src/tmp meu_app` |
 | `prune [tags]...` | Remove arquivos fantasmas do banco. Exige confirmação por padrão. Suporta listar (`-l`), forçar (`-f`), silencioso (`-q`) e todas as tags (`-a`). | `tae prune -a -f` |
 | `export <tag> <dest>` | Exporta os arquivos rastreados lendo o disco local. Suporta fatiamento em zip (`-z`, `-l`, `-m`). | `tae export meu_app ./build -z` |
-| `git diff <c1> <c2>` | Empacota em zip os arquivos alterados (isolado da working tree). O nome do zip detecta automaticamente o nome do repositório. | `tae git diff HEAD~1 HEAD -l 100` |
+| `git diff <c1> <c2>` | Empacota em zip os arquivos alterados (isolado da working tree). O nome do zip detecta automaticamente o repositório. | `tae git diff HEAD~1 HEAD -l 100` |
 | `git list <commit>` | Lista os arquivos da árvore de um commit. Suporta as mesmas opções visuais do `list` (`-t`, `-L`, `-I`). | `tae git list HEAD -t -L 1` |
-| `git export <c> <dest>`| Exporta a árvore de um commit. Identifica o repositório raiz e gera lotes nomeados de forma inteligente (ex: `meu-repo-HEAD.zip`). | `tae git export v3.2.0 ./saida -z` |
+| `git export <c> <dest>`| Exporta a árvore de um commit. Identifica o repositório raiz e gera lotes nomeados de forma inteligente. | `tae git export v3.2.0 ./saida -z` |
 
 ### Detalhes de Exportação e Zip (`export` / `git diff` / `git export`)
 
