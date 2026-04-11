@@ -132,7 +132,7 @@ var pruneCmd = &cobra.Command{
 						fmt.Printf("  - %s [Rastreado]\n", string(k))
 					}
 					for _, k := range ghostsIgnoredByTag[tagName] {
-						fmt.Printf("  - %s [Blacklist]\n", string(k))
+						fmt.Printf("  - %s [Denylist]\n", string(k))
 					}
 				}
 			}

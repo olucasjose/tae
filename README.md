@@ -55,6 +55,7 @@ O fluxo principal baseia-se em: **Criar uma Tag** -> **Rastrear Arquivos** -> **
 | Comando | Descrição | Exemplo |
 |---|---|---|
 | `create <tags>...` | Cria novos contextos (tags) vazios no banco de dados. | `tae create refactor fix` |
+| `rename <old> <new>`| Renomeia uma tag existente e migra seus metadados. | `tae rename fix bugfix` |
 | `delete <tags>...` | Remove uma ou mais tags e todo o seu índice de rastreamento. | `tae delete tag1 tag2` |
 | `list [tag]` | Lista alvos rastreados. Suporta árvore visual (`-t`), profundidade (`-L`), filtro (`-I`), expansão de pastas (`-e`) e dump de exclusões (`-i` / `--ignored`). | `tae list refactor -t -e` |
 | `track <alvos> <tag>` | Adiciona arquivos/pastas ao monitoramento explícito da tag. | `tae track ./cmd/ meu_app` |

@@ -51,7 +51,7 @@ var exportCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		// Carrega a Blacklist em O(1) e passa para o motor de expansão
+		// Carrega a Denylist em O(1) e passa para o motor de expansão
 		ignoredMap, err := storage.GetIgnoredPaths(tagName)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Aviso: Falha ao carregar Exclusion Index: %v\n", err)

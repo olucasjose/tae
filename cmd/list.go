@@ -58,7 +58,7 @@ var listCmd = &cobra.Command{
 
 		tagName := args[0]
 
-		// 2. Interceptação da Blacklist isolada
+		// 2. Interceptação da Denylist isolada
 		if listIgnored {
 			ignoredMap, err := storage.GetIgnoredPaths(tagName)
 			if err != nil {
@@ -71,7 +71,7 @@ var listCmd = &cobra.Command{
 				return
 			}
 
-			fmt.Printf("Exclusion Index (Blacklist) da tag '%s':\n", tagName)
+			fmt.Printf("Exclusion Index (Denylist) da tag '%s':\n", tagName)
 			for path := range ignoredMap {
 				fmt.Printf("  - %s\n", path)
 			}

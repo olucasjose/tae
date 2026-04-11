@@ -12,7 +12,7 @@ import (
 
 var rootCmd = &cobra.Command{
 	Use:     "tae",
-	Version: "4.1.2",
+	Version: "4.2.0",
 	Short:   "Tae é um utilitário CLI para extração e empacotamento de código",
 	Long: `Tae (Tracker and Exporter) é uma ferramenta CLI modular para gerenciar, 
 rastrear e extrair arquivos no disco.
@@ -36,8 +36,9 @@ Exemplo Termux (Android):
 	Example: `  # Criar tags e rastrear arquivos
   tae create "patch_v1" "patch_v2"
   tae track ./src/main.go ./configs/ "patch_v1"
+  tae rename "patch_v1" "patch_v2"
 
-  # Gerenciar Blacklist Permanente (Exclusion Index)
+  # Gerenciar Denylist Permanente (Exclusion Index)
   tae ignore ./configs/secrets.json "patch_v1"
   tae ignore -r ./configs/secrets.json "patch_v1"
   tae list "patch_v1" --ignored
