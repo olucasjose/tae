@@ -61,7 +61,7 @@ var gitExportCmd = &cobra.Command{
 			}
 			
 			for _, f := range rawFiles {
-				if !ignoredMap[f] {
+				if !isGitPathIgnored(f, ignoredMap) {
 					files = append(files, f)
 				}
 			}

@@ -52,7 +52,7 @@ var gitDiffCmd = &cobra.Command{
 			}
 
 			for _, f := range rawFiles {
-				if !ignoredMap[f] {
+				if !isGitPathIgnored(f, ignoredMap) {
 					files = append(files, f)
 				} else {
 					fmt.Printf("  I: %s (ignorado via denylist)\n", f)

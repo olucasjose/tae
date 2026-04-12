@@ -105,3 +105,23 @@ func getGitRelativePath(target string) (string, error) {
 	
 	return filepath.ToSlash(relPath), nil
 }
+
+// isGitPathIgnored verifica se o alvo exato ou algum de seus diretórios pais está na denylist.
+func isGitPathIgnored(target string, ignoredMap map[string]bool) bool {
+	if ignoredMap[target] {
+		return true
+	}
+	parts := strings.Split(target, "/")
+	current := ""
+	for i := 0; i < len(parts)-1; i++ {
+		if current == "" {
+			current = parts[i]
+		} else {
+			current = current + "/" + parts[i]
+		}
+		if ignoredMap[current] {
+			return true
+		}
+	}
+	return false
+}
