@@ -22,9 +22,10 @@ import (
 )
 
 var (
-	exportZip   bool
-	exportLimit int
-	exportMerge bool
+	exportZip     bool
+	exportLimit   int
+	exportMerge   bool
+	exportFlatten bool
 )
 
 var exportCmd = &cobra.Command{
@@ -72,6 +73,11 @@ var exportCmd = &cobra.Command{
 		basePrefix := render.GetCommonPrefix(files)
 		numWorkers := runtime.NumCPU()
 
+		var flattenMap map[string]string
+		if exportFlatten {
+			flattenMap = render.ResolveFlattenNames(files, basePrefix)
+		}
+
 		if exportZip {
 			chunks := grouper.GroupFiles(files, exportLimit, tagName, exportMerge)
 			fmt.Printf("Iniciando exportação em ZIP. %d arquivo(s) expandido(s) divididos em %d lote(s) para '%s'...\n", len(files), len(chunks), destPath)
@@ -81,7 +87,7 @@ var exportCmd = &cobra.Command{
 
 			for i := 0; i < numWorkers; i++ {
 				wg.Add(1)
-				go zipWorker(jobs, &wg, basePrefix, destPath)
+				go zipWorker(jobs, &wg, basePrefix, destPath, flattenMap)
 			}
 
 			for _, c := range chunks {
@@ -99,7 +105,7 @@ var exportCmd = &cobra.Command{
 
 			for i := 0; i < numWorkers; i++ {
 				wg.Add(1)
-				go flatWorker(jobs, &wg, basePrefix, destPath)
+				go flatWorker(jobs, &wg, basePrefix, destPath, flattenMap)
 			}
 
 			for _, file := range files {
@@ -117,6 +123,7 @@ func init() {
 	exportCmd.Flags().BoolVarP(&exportZip, "zip", "z", false, "Exporta e compacta os arquivos em formato .zip")
 	exportCmd.Flags().IntVarP(&exportLimit, "limit", "l", 0, "Teto máximo de arquivos por zip (requer -z)")
 	exportCmd.Flags().BoolVarP(&exportMerge, "merge", "m", false, "Mescla zips subpopulados sequencialmente mantendo o limite (requer -z e -l)")
+	exportCmd.Flags().BoolVarP(&exportFlatten, "flatten", "f", false, "Exporta todos os arquivos no mesmo nível (sem pastas), resolvendo colisões de nomes")
 	rootCmd.AddCommand(exportCmd)
 }
 
@@ -196,11 +203,11 @@ func expandPathsToFiles(paths []string, ignored map[string]bool) []string {
 	return expanded
 }
 
-func zipWorker(jobs <-chan grouper.ExportChunk, wg *sync.WaitGroup, basePrefix, dest string) {
+func zipWorker(jobs <-chan grouper.ExportChunk, wg *sync.WaitGroup, basePrefix, dest string, flattenMap map[string]string) {
 	defer wg.Done()
 	for chunk := range jobs {
 		zipPath := filepath.Join(dest, chunk.ZipName)
-		if err := createZipChunk(zipPath, chunk.Files, basePrefix); err != nil {
+		if err := createZipChunk(zipPath, chunk.Files, basePrefix, flattenMap); err != nil {
 			fmt.Fprintf(os.Stderr, "Erro ao criar %s: %v\n", chunk.ZipName, err)
 		} else {
 			fmt.Printf("  -> %s gerado (%d arquivos reais)\n", chunk.ZipName, len(chunk.Files))
@@ -208,7 +215,7 @@ func zipWorker(jobs <-chan grouper.ExportChunk, wg *sync.WaitGroup, basePrefix, 
 	}
 }
 
-func createZipChunk(zipPath string, files []string, basePrefix string) error {
+func createZipChunk(zipPath string, files []string, basePrefix string, flattenMap map[string]string) error {
 	zipFile, err := os.Create(zipPath)
 	if err != nil {
 		return err
@@ -224,12 +231,17 @@ func createZipChunk(zipPath string, files []string, basePrefix string) error {
 			continue
 		}
 
-		relPath := strings.TrimPrefix(path, basePrefix)
-		relPath = strings.TrimPrefix(relPath, string(filepath.Separator))
-		if relPath == "" {
-			relPath = filepath.Base(path)
+		var relPath string
+		if flattenMap != nil && flattenMap[path] != "" {
+			relPath = flattenMap[path]
+		} else {
+			relPath = strings.TrimPrefix(path, basePrefix)
+			relPath = strings.TrimPrefix(relPath, string(filepath.Separator))
+			if relPath == "" {
+				relPath = filepath.Base(path)
+			}
+			relPath = filepath.ToSlash(relPath)
 		}
-		relPath = filepath.ToSlash(relPath)
 
 		header, err := zip.FileInfoHeader(info)
 		if err != nil {
@@ -257,14 +269,18 @@ func createZipChunk(zipPath string, files []string, basePrefix string) error {
 	return nil
 }
 
-func flatWorker(jobs <-chan string, wg *sync.WaitGroup, basePrefix, dest string) {
+func flatWorker(jobs <-chan string, wg *sync.WaitGroup, basePrefix, dest string, flattenMap map[string]string) {
 	defer wg.Done()
 	for path := range jobs {
-		relPath := strings.TrimPrefix(path, basePrefix)
-		relPath = strings.TrimPrefix(relPath, string(filepath.Separator))
-
-		if relPath == "" {
-			relPath = filepath.Base(path)
+		var relPath string
+		if flattenMap != nil && flattenMap[path] != "" {
+			relPath = flattenMap[path]
+		} else {
+			relPath = strings.TrimPrefix(path, basePrefix)
+			relPath = strings.TrimPrefix(relPath, string(filepath.Separator))
+			if relPath == "" {
+				relPath = filepath.Base(path)
+			}
 		}
 
 		targetPath := filepath.Join(dest, relPath)
