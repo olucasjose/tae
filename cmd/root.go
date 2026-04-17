@@ -12,7 +12,7 @@ import (
 
 var rootCmd = &cobra.Command{
 	Use:           "tae",
-	Version:       "5.2.1",
+	Version:       "5.3.0",
 	Short:         "Tae é um utilitário CLI para extração e empacotamento de código",
 	SilenceErrors: true, // Gina: Impede que o Cobra faça echo do erro, nós controlaremos isso no Execute()
 	SilenceUsage:  true, // Gina: Impede que o menu de ajuda seja impresso toda vez que um comando falhar
