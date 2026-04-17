@@ -5,6 +5,7 @@ package storage
 
 import (
 	"fmt"
+	"strings"
 
 	"go.etcd.io/bbolt"
 )
@@ -49,11 +50,23 @@ func DeleteTags(tags []string) error {
 		tagsBucket := tx.Bucket([]byte(BucketTags))
 		filesBucket := tx.Bucket([]byte(BucketFiles))
 
+		var missingTags []string
+
+		// Validação Fail-Fast Acumulativa
 		for _, tagName := range tags {
-			if tagsBucket.Get([]byte(tagName)) != nil {
-				if err := tagsBucket.Delete([]byte(tagName)); err != nil {
-					return fmt.Errorf("falha ao remover referência da tag '%s': %w", tagName, err)
-				}
+			if tagsBucket.Get([]byte(tagName)) == nil {
+				missingTags = append(missingTags, tagName)
+			}
+		}
+
+		if len(missingTags) > 0 {
+			return fmt.Errorf("as seguintes tags não existem: %s. Operação abortada", strings.Join(missingTags, ", "))
+		}
+
+		// Execução destrutiva
+		for _, tagName := range tags {
+			if err := tagsBucket.Delete([]byte(tagName)); err != nil {
+				return fmt.Errorf("falha ao remover referência da tag '%s': %w", tagName, err)
 			}
 
 			if filesBucket.Bucket([]byte(tagName)) != nil {

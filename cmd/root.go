@@ -11,9 +11,11 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:     "tae",
-	Version: "5.2.0",
-	Short:   "Tae é um utilitário CLI para extração e empacotamento de código",
+	Use:           "tae",
+	Version:       "5.2.1",
+	Short:         "Tae é um utilitário CLI para extração e empacotamento de código",
+	SilenceErrors: true, // Gina: Impede que o Cobra faça echo do erro, nós controlaremos isso no Execute()
+	SilenceUsage:  true, // Gina: Impede que o menu de ajuda seja impresso toda vez que um comando falhar
 	Long: `Tae (Tracker and Exporter) é uma ferramenta CLI modular para gerenciar, 
 rastrear e extrair arquivos no disco.
 
@@ -83,7 +85,8 @@ Use "{{.CommandPath}} [comando] --help" para mais informações sobre um comando
 
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		// Ponto único de saída de erro da aplicação
+		fmt.Fprintf(os.Stderr, "Erro: %v\n", err)
 		os.Exit(1)
 	}
 }

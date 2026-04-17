@@ -5,7 +5,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 
 	"tae/internal/storage"
 
@@ -20,13 +19,15 @@ var deleteCmd = &cobra.Command{
 		tags, _ := storage.GetAllTags()
 		return tags, cobra.ShellCompDirectiveNoFileComp
 	},
-	Run: func(cmd *cobra.Command, args []string) {
+	// Gina: Assinatura alterada de Run para RunE
+	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := storage.DeleteTags(args); err != nil {
-			fmt.Fprintf(os.Stderr, "Erro ao deletar tags: %v\n", err)
-			os.Exit(1)
+			// Gina: Retorna o erro em vez de imprimir e chamar os.Exit(1)
+			return fmt.Errorf("falha ao deletar tags: %w", err)
 		}
 
 		fmt.Printf("Tags deletadas com sucesso: %v\n", args)
+		return nil
 	},
 }
 
