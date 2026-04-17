@@ -16,4 +16,5 @@ tae
 # Arquivos de Log e Temporários
 *.log
 *.diff
+diff/
 vendor/
