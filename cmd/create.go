@@ -11,7 +11,6 @@ import (
 	"tae/internal/storage"
 
 	"github.com/spf13/cobra"
-	"go.etcd.io/bbolt"
 )
 
 var createGit bool
@@ -38,42 +37,17 @@ var createCmd = &cobra.Command{
 			repoName = getGitRepoName()
 		}
 
-		db, err := storage.Open()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Erro ao conectar no banco: %v\n", err)
-			os.Exit(1)
+		meta := storage.TagMeta{Type: storage.TagTypeLocal}
+		if createGit {
+			meta = storage.TagMeta{
+				Type:     storage.TagTypeGit,
+				RepoID:   repoID,
+				RepoName: repoName,
+				GitRoot:  getGitRoot(),
+			}
 		}
-		defer db.Close()
 
-		err = db.Update(func(tx *bbolt.Tx) error {
-			b := tx.Bucket([]byte(storage.BucketTags))
-			
-			for _, tagName := range args {
-				if b.Get([]byte(tagName)) != nil {
-					return fmt.Errorf("a tag '%s' já existe. Operação abortada", tagName)
-				}
-			}
-			
-			meta := storage.TagMeta{Type: storage.TagTypeLocal}
-			if createGit {
-				meta = storage.TagMeta{
-					Type:     storage.TagTypeGit,
-					RepoID:   repoID,
-					RepoName: repoName,
-					GitRoot:  getGitRoot(),
-				}
-			}
-			encodedMeta := storage.EncodeTagMeta(meta)
-
-			for _, tagName := range args {
-				if err := b.Put([]byte(tagName), encodedMeta); err != nil {
-					return fmt.Errorf("erro ao gravar tag '%s': %w", tagName, err)
-				}
-			}
-			return nil
-		})
-
-		if err != nil {
+		if err := storage.CreateTags(args, meta); err != nil {
 			fmt.Fprintf(os.Stderr, "Erro na transação: %v\n", err)
 			os.Exit(1)
 		}

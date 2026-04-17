@@ -18,7 +18,6 @@ import (
 	"tae/internal/storage"
 
 	"github.com/spf13/cobra"
-	"go.etcd.io/bbolt"
 )
 
 var (
@@ -47,7 +46,11 @@ var exportCmd = &cobra.Command{
 		tagName := args[0]
 		destPath := args[1]
 
-		rawFiles := getTagFiles(tagName)
+		rawFiles, err := storage.GetFilesByTag(tagName)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Erro ao buscar rastreamento da tag: %v\n", err)
+			os.Exit(1)
+		}
 		if len(rawFiles) == 0 {
 			fmt.Printf("A tag '%s' não possui alvos rastreados ou não existe.\n", tagName)
 			os.Exit(1)
@@ -147,33 +150,6 @@ func init() {
 	exportCmd.Flags().BoolVarP(&exportFlatten, "flatten", "f", false, "Exporta todos os arquivos no mesmo nível (sem pastas), resolvendo colisões de nomes")
 	exportCmd.Flags().BoolVarP(&exportQuiet, "quiet", "q", false, "Oculta a listagem individual dos arquivos no console")
 	rootCmd.AddCommand(exportCmd)
-}
-
-func getTagFiles(tagName string) []string {
-	var files []string
-	db, err := storage.Open()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Erro ao abrir banco: %v\n", err)
-		os.Exit(1)
-	}
-	defer db.Close()
-
-	db.View(func(tx *bbolt.Tx) error {
-		filesBucket := tx.Bucket([]byte(storage.BucketFiles))
-		if filesBucket == nil {
-			return nil
-		}
-		projFiles := filesBucket.Bucket([]byte(tagName))
-		if projFiles == nil {
-			return nil
-		}
-
-		return projFiles.ForEach(func(k, v []byte) error {
-			files = append(files, string(k))
-			return nil
-		})
-	})
-	return files
 }
 
 func expandPathsToFiles(paths []string, ignored map[string]bool) []string {

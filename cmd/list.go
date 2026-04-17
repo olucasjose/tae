@@ -15,7 +15,6 @@ import (
 	"tae/internal/storage"
 
 	"github.com/spf13/cobra"
-	"go.etcd.io/bbolt"
 )
 
 var (
@@ -41,42 +40,27 @@ var listCmd = &cobra.Command{
 		return tags, cobra.ShellCompDirectiveNoFileComp
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		// 1. Caso sem argumentos: Lista todas as tags isoladamente
 		if len(args) == 0 {
-			db, err := storage.Open()
+			tagsMeta, err := storage.GetAllTagsWithMeta()
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Erro ao conectar no banco: %v\n", err)
+				fmt.Fprintf(os.Stderr, "Erro ao carregar tags: %v\n", err)
 				os.Exit(1)
 			}
 
-			// Lógica de agrupamento por repositório
 			if listGroup {
 				groups := make(map[string][]string)
 
-				db.View(func(tx *bbolt.Tx) error {
-					b := tx.Bucket([]byte(storage.BucketTags))
-					if b == nil {
-						return nil
-					}
-					return b.ForEach(func(k, v []byte) error {
-						meta := storage.ParseTagMeta(v)
-						tag := string(k)
-						repo := "No repo"
-						
-						if meta.Type == storage.TagTypeGit {
-							repo = meta.RepoName
-							if repo == "" {
-								repo = meta.RepoID // Fallback
-							}
+				for tag, meta := range tagsMeta {
+					repo := "No repo"
+					if meta.Type == storage.TagTypeGit {
+						repo = meta.RepoName
+						if repo == "" {
+							repo = meta.RepoID
 						}
-						
-						groups[repo] = append(groups[repo], tag)
-						return nil
-					})
-				})
+					}
+					groups[repo] = append(groups[repo], tag)
+				}
 				
-				db.Close()
-
 				var repos []string
 				for r := range groups {
 					if r != "No repo" {
@@ -85,7 +69,6 @@ var listCmd = &cobra.Command{
 				}
 				sort.Strings(repos)
 
-				// Imprime "No repo" primeiro
 				if tags, ok := groups["No repo"]; ok {
 					fmt.Println("No repo:")
 					sort.Strings(tags)
@@ -97,9 +80,7 @@ var listCmd = &cobra.Command{
 					}
 				}
 
-				// Imprime os repositórios Git com nome em amarelo
 				for i, r := range repos {
-					// \033[33m é o código ANSI para amarelo e \033[0m reseta a formatação
 					fmt.Printf("\033[33m%s:\033[0m\n", r)
 					tags := groups[r]
 					sort.Strings(tags)
@@ -122,41 +103,37 @@ var listCmd = &cobra.Command{
 				fmt.Fprintln(w, "TAG\tTIPO\tREPOSITÓRIO")
 			}
 
-			db.View(func(tx *bbolt.Tx) error {
-				b := tx.Bucket([]byte(storage.BucketTags))
-				if b == nil {
-					return nil
-				}
-				return b.ForEach(func(k, v []byte) error {
-					if listDetails {
-						meta := storage.ParseTagMeta(v)
-						if meta.Type == storage.TagTypeGit {
-							repoName := meta.RepoName
-							if repoName == "" {
-								repoName = meta.RepoID // Fallback
-							}
-							fmt.Fprintf(w, "%s\tGit\t%s\n", k, repoName)
-						} else {
-							fmt.Fprintf(w, "%s\tLocal\t\n", k)
+			var tagNames []string
+			for t := range tagsMeta {
+				tagNames = append(tagNames, t)
+			}
+			sort.Strings(tagNames)
+
+			for _, tagName := range tagNames {
+				meta := tagsMeta[tagName]
+				if listDetails {
+					if meta.Type == storage.TagTypeGit {
+						repoName := meta.RepoName
+						if repoName == "" {
+							repoName = meta.RepoID
 						}
+						fmt.Fprintf(w, "%s\tGit\t%s\n", tagName, repoName)
 					} else {
-						fmt.Printf("  - %s\n", k)
+						fmt.Fprintf(w, "%s\tLocal\t\n", tagName)
 					}
-					return nil
-				})
-			})
+				} else {
+					fmt.Printf("  - %s\n", tagName)
+				}
+			}
 
 			if listDetails {
 				w.Flush()
 			}
-			
-			db.Close() // Fecha e libera o lock do arquivo
 			return
 		}
 
 		tagName := args[0]
 
-		// 2. Interceptação da Denylist isolada
 		if listIgnored {
 			ignoredMap, err := storage.GetIgnoredPaths(tagName)
 			if err != nil {
@@ -176,32 +153,7 @@ var listCmd = &cobra.Command{
 			return
 		}
 
-		// 3. Busca principal isolada (Abre e fecha o banco rapidamente numa closure)
-		var files []string
-		err := func() error {
-			db, err := storage.Open()
-			if err != nil {
-				return err
-			}
-			defer db.Close() // Fecha o banco no fim deste bloco
-
-			return db.View(func(tx *bbolt.Tx) error {
-				filesBucket := tx.Bucket([]byte(storage.BucketFiles))
-				if filesBucket == nil {
-					return nil
-				}
-				projFiles := filesBucket.Bucket([]byte(tagName))
-				if projFiles == nil {
-					return nil
-				}
-
-				return projFiles.ForEach(func(k, v []byte) error {
-					files = append(files, string(k))
-					return nil
-				})
-			})
-		}()
-
+		files, err := storage.GetFilesByTag(tagName)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Erro ao consultar arquivos: %v\n", err)
 			os.Exit(1)
@@ -212,7 +164,6 @@ var listCmd = &cobra.Command{
 			return
 		}
 
-		// NOVA LÓGICA: Restaura os caminhos para bater com a raiz física se for tag Git
 		resolvedFiles, err := restorePathsForDisk(tagName, files)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Erro de escopo estrutural: %v\n", err)
@@ -220,11 +171,9 @@ var listCmd = &cobra.Command{
 		}
 		files = resolvedFiles
 
-		// 4. Expansão
 		if listExpand {
 			ignoredMap, _ := storage.GetIgnoredPaths(tagName)
 			
-			// Restaura a denylist para a mesma base física
 			restoredIgnored := make(map[string]bool)
 			var igPaths []string
 			for p := range ignoredMap { igPaths = append(igPaths, p) }
@@ -237,7 +186,6 @@ var listCmd = &cobra.Command{
 
 		fmt.Printf("Alvos rastreados na tag '%s':\n", tagName)
 
-		// Exibição Absoluta (Legado)
 		if listAbsolute {
 			for _, f := range files {
 				fmt.Printf("  - %s\n", f)
@@ -245,7 +193,6 @@ var listCmd = &cobra.Command{
 			return
 		}
 
-		// Preparação da engine visual e caminhos relativos
 		basePrefix := render.GetCommonPrefix(files)
 		var ignorePatterns []string
 		if listIgnore != "" {
