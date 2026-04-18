@@ -4,7 +4,6 @@ go 1.25.4
 
 require (
 	github.com/spf13/cobra v1.10.2
-	go.etcd.io/bbolt v1.4.3
 	modernc.org/sqlite v1.49.1
 )
 

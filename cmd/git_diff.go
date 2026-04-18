@@ -4,18 +4,14 @@
 package cmd
 
 import (
-	"archive/zip"
 	"fmt"
-	"os"
-	"path/filepath"
 	"runtime"
-	"strings"
-	"sync"
 	"time"
 
 	"tae/internal/grouper"
 	"tae/internal/render"
 	"tae/internal/storage"
+	"tae/internal/exporter"
 	"tae/internal/vcs"
 
 	"github.com/spf13/cobra"
@@ -88,20 +84,14 @@ var gitDiffCmd = &cobra.Command{
 		fmt.Printf("\nIniciando empacotamento de %d arquivo(s) em %d lote(s)...\n", len(files), len(chunks))
 
 		numWorkers := runtime.NumCPU()
-		jobs := make(chan grouper.ExportChunk, len(chunks))
-		var wg sync.WaitGroup
-
-		for i := 0; i < numWorkers; i++ {
-			wg.Add(1)
-			go diffWorker(jobs, &wg, basePrefix, commit2)
+		
+		opts := exporter.ExportOptions{
+			DestDir:    ".", // diff sempre exporta no diretório atual
+			BasePrefix: basePrefix,
+			GitCommit:  commit2,
 		}
-
-		for _, c := range chunks {
-			jobs <- c
-		}
-		close(jobs)
-		wg.Wait()
-
+		exporter.ExportZip(chunks, numWorkers, opts)
+		
 		fmt.Printf("\nSucesso! %d arquivo(s) zip gerado(s) no diretório atual.\n", len(chunks))
 		return nil
 	},
@@ -112,43 +102,4 @@ func init() {
 	gitDiffCmd.Flags().BoolVarP(&diffMerge, "merge", "m", false, "Mescla zips subpopulados mantendo o limite (requer -l)")
 	gitDiffCmd.Flags().BoolVar(&diffNoIgnore, "no-ignore", false, "Ignora a denylist do repositório e empacota todos os arquivos alterados")
 	gitCmd.AddCommand(gitDiffCmd)
-}
-
-func diffWorker(jobs <-chan grouper.ExportChunk, wg *sync.WaitGroup, basePrefix, targetCommit string) {
-	defer wg.Done()
-	for chunk := range jobs {
-		if err := buildZipChunk(chunk.ZipName, chunk.Files, basePrefix, targetCommit); err != nil {
-			fmt.Printf("Erro ao criar %s: %v\n", chunk.ZipName, err)
-		} else {
-			fmt.Printf("  -> %s gerado (%d arquivos)\n", chunk.ZipName, len(chunk.Files))
-		}
-	}
-}
-
-func buildZipChunk(zipPath string, files []string, basePrefix, commit string) error {
-	zipFile, err := os.Create(zipPath)
-	if err != nil {
-		return err
-	}
-	defer zipFile.Close()
-
-	archive := zip.NewWriter(zipFile)
-	defer archive.Close()
-
-	for _, path := range files {
-		relPath := filepath.ToSlash(strings.TrimPrefix(path, basePrefix))
-		if relPath == "" {
-			relPath = filepath.Base(path)
-		}
-
-		writer, err := archive.Create(relPath)
-		if err != nil {
-			return err
-		}
-
-		if err := vcs.StreamBlob(commit, path, writer); err != nil {
-			return err
-		}
-	}
-	return nil
 }

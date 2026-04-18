@@ -4,18 +4,15 @@
 package cmd
 
 import (
-	"archive/zip"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
-	"sync"
 
 	"tae/internal/grouper"
 	"tae/internal/render"
 	"tae/internal/storage"
+	"tae/internal/exporter"
 
 	"github.com/spf13/cobra"
 )
@@ -92,7 +89,12 @@ var exportCmd = &cobra.Command{
 			flattenMap = render.ResolveFlattenNames(files, basePrefix)
 		}
 
-		var printMu sync.Mutex
+		opts := exporter.ExportOptions{
+			DestDir:    destPath,
+			BasePrefix: basePrefix,
+			FlattenMap: flattenMap,
+			Quiet:      exportQuiet,
+		}
 
 		if exportZip {
 			chunks := grouper.GroupFiles(files, exportLimit, tagName, exportMerge)
@@ -100,39 +102,11 @@ var exportCmd = &cobra.Command{
 			if !exportQuiet {
 				fmt.Printf("[Raiz Comum: %s]\n\n", basePrefix)
 			}
-
-			jobs := make(chan grouper.ExportChunk, len(chunks))
-			var wg sync.WaitGroup
-
-			for i := 0; i < numWorkers; i++ {
-				wg.Add(1)
-				go zipWorker(jobs, &wg, basePrefix, destPath, flattenMap, &printMu)
-			}
-
-			for _, c := range chunks {
-				jobs <- c
-			}
-			close(jobs)
-			wg.Wait()
-
+			exporter.ExportZip(chunks, numWorkers, opts)
 			fmt.Printf("\nSucesso! %d arquivo(s) zip gerado(s) na pasta '%s'.\n", len(chunks), destPath)
 		} else {
 			fmt.Printf("Iniciando exportação plana de %d arquivo(s) para '%s' com %d worker(s)....\n", len(files), destPath, numWorkers)
-
-			jobs := make(chan string, len(files))
-			var wg sync.WaitGroup
-
-			for i := 0; i < numWorkers; i++ {
-				wg.Add(1)
-				go flatWorker(jobs, &wg, basePrefix, destPath, flattenMap, &printMu)
-			}
-
-			for _, file := range files {
-				jobs <- file
-			}
-			close(jobs)
-			wg.Wait()
-
+			exporter.ExportFlat(files, numWorkers, opts)
 			fmt.Printf("\nSucesso! Arquivos exportados para a pasta '%s'.\n", destPath)
 		}
 		return nil
@@ -180,114 +154,4 @@ func expandPathsToFiles(paths []string, ignored map[string]bool) []string {
 		})
 	}
 	return expanded
-}
-
-func zipWorker(jobs <-chan grouper.ExportChunk, wg *sync.WaitGroup, basePrefix, dest string, flattenMap map[string]string, mu *sync.Mutex) {
-	defer wg.Done()
-	for chunk := range jobs {
-		zipPath := filepath.Join(dest, chunk.ZipName)
-		err := createZipChunk(zipPath, chunk.Files, basePrefix, flattenMap)
-
-		mu.Lock()
-		if err != nil {
-			fmt.Printf("Erro ao criar %s: %v\n", chunk.ZipName, err)
-		} else {
-			fmt.Printf("  -> %s gerado (%d arquivos reais)\n", chunk.ZipName, len(chunk.Files))
-			if !exportQuiet {
-				for _, path := range chunk.Files {
-					var relPath string
-					if flattenMap != nil && flattenMap[path] != "" {
-						relPath = flattenMap[path]
-					} else {
-						relPath = strings.TrimPrefix(path, basePrefix)
-						relPath = strings.TrimPrefix(relPath, string(filepath.Separator))
-						if relPath == "" { relPath = filepath.Base(path) }
-						relPath = filepath.ToSlash(relPath)
-					}
-					fmt.Printf("      - %s\n", relPath)
-				}
-			}
-		}
-		mu.Unlock()
-	}
-}
-
-func createZipChunk(zipPath string, files []string, basePrefix string, flattenMap map[string]string) error {
-	zipFile, err := os.Create(zipPath)
-	if err != nil { return err }
-	defer zipFile.Close()
-
-	archive := zip.NewWriter(zipFile)
-	defer archive.Close()
-
-	for _, path := range files {
-		info, err := os.Stat(path)
-		if err != nil || info.IsDir() { continue }
-
-		var relPath string
-		if flattenMap != nil && flattenMap[path] != "" {
-			relPath = flattenMap[path]
-		} else {
-			relPath = strings.TrimPrefix(path, basePrefix)
-			relPath = strings.TrimPrefix(relPath, string(filepath.Separator))
-			if relPath == "" { relPath = filepath.Base(path) }
-			relPath = filepath.ToSlash(relPath)
-		}
-
-		header, err := zip.FileInfoHeader(info)
-		if err != nil { return err }
-		header.Name = relPath
-		header.Method = zip.Deflate
-
-		writer, err := archive.CreateHeader(header)
-		if err != nil { return err }
-
-		fileToZip, err := os.Open(path)
-		if err != nil { return err }
-
-		_, err = io.Copy(writer, fileToZip)
-		fileToZip.Close()
-		if err != nil { return err }
-	}
-	return nil
-}
-
-func flatWorker(jobs <-chan string, wg *sync.WaitGroup, basePrefix, dest string, flattenMap map[string]string, mu *sync.Mutex) {
-	defer wg.Done()
-	for path := range jobs {
-		var relPath string
-		if flattenMap != nil && flattenMap[path] != "" {
-			relPath = flattenMap[path]
-		} else {
-			relPath = strings.TrimPrefix(path, basePrefix)
-			relPath = strings.TrimPrefix(relPath, string(filepath.Separator))
-			if relPath == "" { relPath = filepath.Base(path) }
-		}
-
-		targetPath := filepath.Join(dest, relPath)
-		err := copySingleFile(path, targetPath)
-
-		mu.Lock()
-		if err != nil {
-			fmt.Printf("Erro ao exportar %s: %v\n", path, err)
-		} else if !exportQuiet {
-			fmt.Printf("  -> %s\n", targetPath)
-		}
-		mu.Unlock()
-	}
-}
-
-func copySingleFile(src, dst string) error {
-	sourceFile, err := os.Open(src)
-	if err != nil { return err }
-	defer sourceFile.Close()
-
-	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil { return err }
-
-	destFile, err := os.Create(dst)
-	if err != nil { return err }
-	defer destFile.Close()
-
-	_, err = io.Copy(destFile, sourceFile)
-	return err
 }
