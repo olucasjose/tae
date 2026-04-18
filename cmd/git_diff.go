@@ -5,10 +5,8 @@ package cmd
 
 import (
 	"archive/zip"
-	"bytes"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -18,6 +16,7 @@ import (
 	"tae/internal/grouper"
 	"tae/internal/render"
 	"tae/internal/storage"
+	"tae/internal/vcs"
 
 	"github.com/spf13/cobra"
 )
@@ -36,20 +35,29 @@ var gitDiffCmd = &cobra.Command{
 		commit1, commit2 := args[0], args[1]
 		fmt.Printf("Comparando %s -> %s\n\n", commit1, commit2)
 
-		rawFiles, err := getChangedFiles(commit1, commit2)
+		changes, err := vcs.GetChangedFiles(commit1, commit2)
 		if err != nil {
 			return err
 		}
 
-		if len(rawFiles) == 0 {
+		if len(changes) == 0 {
 			fmt.Println("\nNenhum arquivo modificado encontrado na comparação.")
 			return nil
 		}
 
-		// Interceptação e Filtro da Denylist
+		var rawFiles []string
+		for _, c := range changes {
+			rawFiles = append(rawFiles, c.Path)
+			if c.IsRename {
+				fmt.Printf("  R: %s (renomeado)\n", c.Path)
+			} else {
+				fmt.Printf("  %c: %s\n", c.Status, c.Path)
+			}
+		}
+
 		var files []string
 		if !diffNoIgnore {
-			repoID := getGitRepoID()
+			repoID := vcs.GetRepoID()
 			ignoredMap, err := storage.GetGitIgnoredPaths(repoID)
 			if err != nil {
 				fmt.Printf("Aviso: Falha ao carregar denylist do repositório: %v\n", err)
@@ -72,7 +80,7 @@ var gitDiffCmd = &cobra.Command{
 		}
 
 		timestamp := time.Now().Format("20060102_150405")
-		repoName := getGitRepoName()
+		repoName := vcs.GetRepoName()
 		baseName := fmt.Sprintf("%s-diff-%s", repoName, timestamp)
 		basePrefix := render.GetCommonPrefix(files)
 
@@ -88,7 +96,9 @@ var gitDiffCmd = &cobra.Command{
 			go diffWorker(jobs, &wg, basePrefix, commit2)
 		}
 
-		for _, c := range chunks { jobs <- c }
+		for _, c := range chunks {
+			jobs <- c
+		}
 		close(jobs)
 		wg.Wait()
 
@@ -104,47 +114,6 @@ func init() {
 	gitCmd.AddCommand(gitDiffCmd)
 }
 
-func getChangedFiles(c1, c2 string) ([]string, error) {
-	cmd := exec.Command("git", "diff", "--name-status", c1, c2)
-	var out, stderr bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("erro no git diff:\n%s", stderr.String())
-	}
-
-	var filesToZip []string
-	for _, line := range strings.Split(out.String(), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" { continue }
-		
-		parts := strings.Split(line, "\t")
-		if len(parts) < 2 { continue }
-
-		statusChar := strings.ToUpper(parts[0])[0]
-		var filePath string
-		isRename := false
-
-		if (statusChar == 'A' || statusChar == 'M') && len(parts) >= 2 {
-			filePath = parts[1]
-		} else if statusChar == 'R' && len(parts) >= 3 {
-			filePath = parts[2]
-			isRename = true
-		} else {
-			continue // Ignora remoções (D) ou status desconhecidos
-		}
-
-		filesToZip = append(filesToZip, filePath)
-		if isRename {
-			fmt.Printf("  R: %s (renomeado)\n", filePath)
-		} else {
-			fmt.Printf("  %c: %s\n", statusChar, filePath)
-		}
-	}
-	return filesToZip, nil
-}
-
 func diffWorker(jobs <-chan grouper.ExportChunk, wg *sync.WaitGroup, basePrefix, targetCommit string) {
 	defer wg.Done()
 	for chunk := range jobs {
@@ -158,7 +127,9 @@ func diffWorker(jobs <-chan grouper.ExportChunk, wg *sync.WaitGroup, basePrefix,
 
 func buildZipChunk(zipPath string, files []string, basePrefix, commit string) error {
 	zipFile, err := os.Create(zipPath)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	defer zipFile.Close()
 
 	archive := zip.NewWriter(zipFile)
@@ -166,12 +137,16 @@ func buildZipChunk(zipPath string, files []string, basePrefix, commit string) er
 
 	for _, path := range files {
 		relPath := filepath.ToSlash(strings.TrimPrefix(path, basePrefix))
-		if relPath == "" { relPath = filepath.Base(path) }
+		if relPath == "" {
+			relPath = filepath.Base(path)
+		}
 
 		writer, err := archive.Create(relPath)
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 
-		if err := streamGitBlob(commit, path, writer); err != nil {
+		if err := vcs.StreamBlob(commit, path, writer); err != nil {
 			return err
 		}
 	}

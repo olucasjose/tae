@@ -5,12 +5,12 @@ package cmd
 
 import (
 	"fmt"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"tae/internal/render"
 	"tae/internal/storage"
+	"tae/internal/vcs"
 
 	"github.com/spf13/cobra"
 )
@@ -20,7 +20,7 @@ var (
 	gitListDepth    int
 	gitListIgnore   string
 	gitListIgnored  bool
-	gitListNoIgnore bool // Nova flag para bypass
+	gitListNoIgnore bool
 )
 
 var gitListCmd = &cobra.Command{
@@ -28,9 +28,8 @@ var gitListCmd = &cobra.Command{
 	Short: "Lista arquivos de um commit ou a denylist do repositório atual",
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// Interceptação isolada para listar a denylist do repositório
 		if gitListIgnored {
-			repoID := getGitRepoID()
+			repoID := vcs.GetRepoID()
 			ignoredMap, err := storage.GetGitIgnoredPaths(repoID)
 			if err != nil {
 				return fmt.Errorf("erro ao ler a denylist do repositório: %w", err)
@@ -48,22 +47,14 @@ var gitListCmd = &cobra.Command{
 			return nil
 		}
 
-		// Validação Fail-Fast: se não for para ver a denylist, um commit é obrigatório
 		if len(args) == 0 {
 			return fmt.Errorf("informe um <commit> para listar ou use a flag --ignored (-i) para ver a denylist")
 		}
 
 		commit := args[0]
-		out, err := exec.Command("git", "ls-tree", "-r", "--name-only", commit).CombinedOutput()
+		rawFiles, err := vcs.ListTree(commit)
 		if err != nil {
-			return fmt.Errorf("erro ao consultar Git:\n%s", string(out))
-		}
-
-		var rawFiles []string
-		for _, f := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-			if f != "" {
-				rawFiles = append(rawFiles, f)
-			}
+			return err
 		}
 
 		if len(rawFiles) == 0 {
@@ -71,10 +62,9 @@ var gitListCmd = &cobra.Command{
 			return nil
 		}
 
-		// Interceptação e Filtro da Denylist
 		var files []string
 		if !gitListNoIgnore {
-			repoID := getGitRepoID()
+			repoID := vcs.GetRepoID()
 			ignoredMap, err := storage.GetGitIgnoredPaths(repoID)
 			if err != nil {
 				fmt.Printf("Aviso: Falha ao carregar denylist do repositório: %v\n", err)
