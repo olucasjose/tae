@@ -37,9 +37,10 @@ func resolveRelPath(path, basePrefix string, flattenMap map[string]string) strin
 	return relPath
 }
 
-func writeContent(path, gitCommit string, w io.Writer) error {
-	if gitCommit != "" {
-		return vcs.StreamBlob(gitCommit, path, w)
+// writeContent agora recebe a instância ativa do BatchReader do worker atual
+func writeContent(path, gitCommit string, w io.Writer, br *vcs.BatchReader) error {
+	if gitCommit != "" && br != nil {
+		return br.ReadBlob(gitCommit, path, w)
 	}
 
 	f, err := os.Open(path)
@@ -57,13 +58,32 @@ func ExportZip(chunks []grouper.ExportChunk, workers int, opts ExportOptions) {
 	var wg sync.WaitGroup
 	var printMu sync.Mutex
 
+	var gitRoot string
+	if opts.GitCommit != "" {
+		gitRoot = vcs.GetRoot()
+	}
+
 	for i := 0; i < workers; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+
+			var br *vcs.BatchReader
+			if opts.GitCommit != "" {
+				var err error
+				br, err = vcs.NewBatchReader(gitRoot)
+				if err != nil {
+					printMu.Lock()
+					fmt.Printf("Falha crítica ao iniciar worker do Git: %v\n", err)
+					printMu.Unlock()
+					return
+				}
+				defer br.Close()
+			}
+
 			for chunk := range jobs {
 				zipPath := filepath.Join(opts.DestDir, chunk.ZipName)
-				err := buildZip(zipPath, chunk.Files, opts)
+				err := buildZip(zipPath, chunk.Files, opts, br)
 
 				printMu.Lock()
 				if err != nil {
@@ -89,7 +109,7 @@ func ExportZip(chunks []grouper.ExportChunk, workers int, opts ExportOptions) {
 	wg.Wait()
 }
 
-func buildZip(zipPath string, files []string, opts ExportOptions) error {
+func buildZip(zipPath string, files []string, opts ExportOptions, br *vcs.BatchReader) error {
 	zipFile, err := os.Create(zipPath)
 	if err != nil {
 		return err
@@ -125,7 +145,7 @@ func buildZip(zipPath string, files []string, opts ExportOptions) error {
 			}
 		}
 
-		if err := writeContent(path, opts.GitCommit, writer); err != nil {
+		if err := writeContent(path, opts.GitCommit, writer, br); err != nil {
 			return err
 		}
 	}
@@ -138,10 +158,29 @@ func ExportFlat(files []string, workers int, opts ExportOptions) {
 	var wg sync.WaitGroup
 	var printMu sync.Mutex
 
+	var gitRoot string
+	if opts.GitCommit != "" {
+		gitRoot = vcs.GetRoot()
+	}
+
 	for i := 0; i < workers; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+
+			var br *vcs.BatchReader
+			if opts.GitCommit != "" {
+				var err error
+				br, err = vcs.NewBatchReader(gitRoot)
+				if err != nil {
+					printMu.Lock()
+					fmt.Printf("Falha crítica ao iniciar worker do Git: %v\n", err)
+					printMu.Unlock()
+					return
+				}
+				defer br.Close()
+			}
+
 			for path := range jobs {
 				if opts.GitCommit == "" {
 					info, err := os.Stat(path)
@@ -161,7 +200,7 @@ func ExportFlat(files []string, workers int, opts ExportOptions) {
 					if err != nil {
 						errOut = fmt.Errorf("Erro ao criar %s: %v", path, err)
 					} else {
-						errOut = writeContent(path, opts.GitCommit, destFile)
+						errOut = writeContent(path, opts.GitCommit, destFile, br)
 						destFile.Close()
 					}
 				}

@@ -4,11 +4,13 @@
 package vcs
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"io"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -19,26 +21,93 @@ type DiffStatus struct {
 	IsRename bool
 }
 
+// BatchReader gerencia um subprocesso persistente do git cat-file --batch
+type BatchReader struct {
+	cmd    *exec.Cmd
+	stdin  io.WriteCloser
+	stdout *bufio.Reader
+}
+
+// NewBatchReader inicializa o processo atado ao ciclo de vida do worker
+func NewBatchReader(gitRoot string) (*BatchReader, error) {
+	cmd := exec.Command("git", "cat-file", "--batch")
+	cmd.Dir = gitRoot // Garante que roda no contexto do repositório correto
+
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return nil, fmt.Errorf("falha ao abrir stdin pipe: %w", err)
+	}
+
+	stdoutPipe, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, fmt.Errorf("falha ao abrir stdout pipe: %w", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("falha ao iniciar git cat-file --batch: %w", err)
+	}
+
+	return &BatchReader{
+		cmd:    cmd,
+		stdin:  stdin,
+		stdout: bufio.NewReader(stdoutPipe),
+	}, nil
+}
+
+// ReadBlob extrai um arquivo específico do git usando o canal aberto
+func (b *BatchReader) ReadBlob(commit, path string, dest io.Writer) error {
+	gitPath := filepath.ToSlash(path)
+	request := fmt.Sprintf("%s:%s\n", commit, gitPath)
+
+	if _, err := b.stdin.Write([]byte(request)); err != nil {
+		return fmt.Errorf("falha ao enviar requisição ao batch: %w", err)
+	}
+
+	// O formato de resposta padrão do git é: <oid> <type> <size>\n
+	// Se o objeto não existir, retorna: <object> missing\n
+	header, err := b.stdout.ReadString('\n')
+	if err != nil {
+		return fmt.Errorf("falha ao ler cabeçalho do batch: %w", err)
+	}
+
+	header = strings.TrimSpace(header)
+	if strings.HasSuffix(header, "missing") {
+		return fmt.Errorf("objeto não encontrado no git: %s", request)
+	}
+
+	parts := strings.Split(header, " ")
+	if len(parts) < 3 {
+		return fmt.Errorf("cabeçalho de resposta inválido: %s", header)
+	}
+
+	size, err := strconv.ParseInt(parts[2], 10, 64)
+	if err != nil {
+		return fmt.Errorf("tamanho de arquivo inválido no cabeçalho: %w", err)
+	}
+
+	// Copia exatamente 'size' bytes da stream para o destino
+	if _, err := io.CopyN(dest, b.stdout, size); err != nil {
+		return fmt.Errorf("falha ao ler corpo do blob: %w", err)
+	}
+
+	// Consome a quebra de linha residual após a leitura do conteúdo
+	if _, err := b.stdout.ReadByte(); err != nil {
+		return fmt.Errorf("falha ao ler byte residual: %w", err)
+	}
+
+	return nil
+}
+
+// Close encerra o processo de forma limpa, fechando o stdin
+func (b *BatchReader) Close() error {
+	b.stdin.Close()
+	return b.cmd.Wait()
+}
+
 // IsInsideRepo verifica silenciosamente se o diretório atual é uma working tree válida
 func IsInsideRepo() bool {
 	cmd := exec.Command("git", "rev-parse", "--is-inside-work-tree")
 	return cmd.Run() == nil
-}
-
-// StreamBlob lê os bytes diretamente dos objetos internos do Git (isolado do disco rígido)
-func StreamBlob(commit, path string, dest io.Writer) error {
-	gitPath := filepath.ToSlash(path) // Garante o padrão UNIX exigido pelo Git
-
-	cmd := exec.Command("git", "show", fmt.Sprintf("%s:%s", commit, gitPath))
-	cmd.Stdout = dest // Streaming direto
-
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("falha ao ler blob do git: %s (stderr: %s)", err, strings.TrimSpace(stderr.String()))
-	}
-	return nil
 }
 
 // GetRepoName extrai o nome do diretório raiz do repositório atual
