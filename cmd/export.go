@@ -13,6 +13,7 @@ import (
 	"tae/internal/render"
 	"tae/internal/storage"
 	"tae/internal/exporter"
+	"tae/internal/fs"
 
 	"github.com/spf13/cobra"
 )
@@ -121,37 +122,4 @@ func init() {
 	exportCmd.Flags().BoolVarP(&exportFlatten, "flatten", "f", false, "Exporta todos os arquivos no mesmo nível (sem pastas), resolvendo colisões de nomes")
 	exportCmd.Flags().BoolVarP(&exportQuiet, "quiet", "q", false, "Oculta a listagem individual dos arquivos no console")
 	rootCmd.AddCommand(exportCmd)
-}
-
-func expandPathsToFiles(paths []string, ignored map[string]bool) []string {
-	uniqueFiles := make(map[string]bool)
-	var expanded []string
-
-	for _, p := range paths {
-		if ignored[p] { continue }
-		info, err := os.Stat(p)
-		if err != nil { continue }
-		if !info.IsDir() {
-			if !uniqueFiles[p] {
-				uniqueFiles[p] = true
-				expanded = append(expanded, p)
-			}
-			continue
-		}
-		filepath.Walk(p, func(path string, f os.FileInfo, err error) error {
-			if err != nil { return nil }
-			if ignored[path] {
-				if f.IsDir() { return filepath.SkipDir }
-				return nil
-			}
-			if !f.IsDir() {
-				if !uniqueFiles[path] {
-					uniqueFiles[path] = true
-					expanded = append(expanded, path)
-				}
-			}
-			return nil
-		})
-	}
-	return expanded
 }
