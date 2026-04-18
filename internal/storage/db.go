@@ -8,8 +8,15 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 
 	_ "modernc.org/sqlite"
+)
+
+var (
+	dbInstance *sql.DB
+	dbOnce     sync.Once
+	dbErr      error
 )
 
 // getDBPath resolve o caminho seguro para o banco de dados global
@@ -27,32 +34,51 @@ func getDBPath() (string, error) {
 	return filepath.Join(dir, "tae.db"), nil
 }
 
-// Open inicia a conexão com o SQLite e garante a existência das tabelas
-func Open() (*sql.DB, error) {
-	dbPath, err := getDBPath()
-	if err != nil {
-		return nil, err
+// GetDB retorna a instância global e thread-safe do pool de conexões do SQLite.
+// Substitui o antigo Open() para evitar o gargalo de I/O de múltiplas aberturas.
+func GetDB() (*sql.DB, error) {
+	dbOnce.Do(func() {
+		var dbPath string
+		dbPath, dbErr = getDBPath()
+		if dbErr != nil {
+			return
+		}
+
+		// WAL melhora absurdamente a performance concorrente.
+		// busy_timeout impede falhas imediatas em locks.
+		dsn := fmt.Sprintf("%s?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)", dbPath)
+
+		dbInstance, dbErr = sql.Open("sqlite", dsn)
+		if dbErr != nil {
+			dbErr = fmt.Errorf("falha ao abrir arquivo sqlite: %w", dbErr)
+			return
+		}
+
+		// Restringe o pool para evitar contenção de trava no nível de arquivo
+		dbInstance.SetMaxOpenConns(1)
+
+		if dbErr = dbInstance.Ping(); dbErr != nil {
+			dbInstance.Close()
+			dbErr = fmt.Errorf("falha ao conectar no banco sqlite: %w", dbErr)
+			return
+		}
+
+		if dbErr = createSchema(dbInstance); dbErr != nil {
+			dbInstance.Close()
+			return
+		}
+	})
+
+	return dbInstance, dbErr
+}
+
+// CloseDB encerra o pool de conexões de forma limpa.
+// Deve ser chamado apenas uma vez no encerramento do processo.
+func CloseDB() error {
+	if dbInstance != nil {
+		return dbInstance.Close()
 	}
-
-	// _pragma=foreign_keys(1) garante que o SQLite respeite CASCADE e restrições
-	dsn := fmt.Sprintf("%s?_pragma=foreign_keys(1)", dbPath)
-
-	db, err := sql.Open("sqlite", dsn)
-	if err != nil {
-		return nil, fmt.Errorf("falha ao abrir arquivo sqlite: %w", err)
-	}
-
-	if err := db.Ping(); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("falha ao conectar no banco sqlite: %w", err)
-	}
-
-	if err := createSchema(db); err != nil {
-		db.Close()
-		return nil, err
-	}
-
-	return db, nil
+	return nil
 }
 
 func createSchema(db *sql.DB) error {
@@ -95,11 +121,11 @@ func createSchema(db *sql.DB) error {
 
 // GetAllTags retorna uma lista com os nomes de todas as tags cadastradas no banco
 func GetAllTags() ([]string, error) {
-	db, err := Open()
+	db, err := GetDB()
 	if err != nil {
 		return nil, err
 	}
-	defer db.Close()
+	// NÃO use defer db.Close() aqui em hipótese alguma.
 
 	rows, err := db.Query("SELECT name FROM tags")
 	if err != nil {

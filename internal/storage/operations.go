@@ -9,11 +9,10 @@ import (
 
 // GetTagRawKeys retorna as chaves do banco exatamente como estão gravadas.
 func GetTagRawKeys(tagName string) (files []string, ignored []string, err error) {
-	db, err := Open()
+	db, err := GetDB()
 	if err != nil {
 		return nil, nil, err
 	}
-	defer db.Close()
 
 	fRows, err := db.Query("SELECT path FROM files_tracked WHERE tag_name = ?", tagName)
 	if err == nil {
@@ -42,11 +41,10 @@ func GetTagRawKeys(tagName string) (files []string, ignored []string, err error)
 
 // RemoveKeysFromTag deleta chaves específicas dos buckets de uma tag (usado pelo prune).
 func RemoveKeysFromTag(tagName string, filesToRemove, ignoredToRemove []string) error {
-	db, err := Open()
+	db, err := GetDB()
 	if err != nil {
 		return err
 	}
-	defer db.Close()
 
 	tx, err := db.Begin()
 	if err != nil {
@@ -74,11 +72,10 @@ func RemoveKeysFromTag(tagName string, filesToRemove, ignoredToRemove []string) 
 
 // UpdateTagScope reescreve os caminhos de uma tag resolvendo a troca de contexto (Local <-> Git).
 func UpdateTagScope(tagName string, meta TagMeta, swapFiles, swapIgnored map[string]string) error {
-	db, err := Open()
+	db, err := GetDB()
 	if err != nil {
 		return err
 	}
-	defer db.Close()
 
 	tx, err := db.Begin()
 	if err != nil {

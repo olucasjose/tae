@@ -11,11 +11,11 @@ import (
 
 // CreateTags cadastra múltiplas tags no banco de forma atômica.
 func CreateTags(tags []string, meta TagMeta) error {
-	db, err := Open()
+	db, err := GetDB()
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	// Removido: defer db.Close()
 
 	tx, err := db.Begin()
 	if err != nil {
@@ -53,11 +53,10 @@ func CreateTags(tags []string, meta TagMeta) error {
 
 // DeleteTags remove as tags e aciona em cascata a limpeza de seus arquivos rastreados.
 func DeleteTags(tags []string) error {
-	db, err := Open()
+	db, err := GetDB()
 	if err != nil {
 		return err
 	}
-	defer db.Close()
 
 	tx, err := db.Begin()
 	if err != nil {
@@ -100,11 +99,10 @@ func DeleteTags(tags []string) error {
 
 // GetFilesByTag retorna a lista plana de todos os caminhos rastreados por uma tag.
 func GetFilesByTag(tagName string) ([]string, error) {
-	db, err := Open()
+	db, err := GetDB()
 	if err != nil {
 		return nil, err
 	}
-	defer db.Close()
 
 	rows, err := db.Query("SELECT path FROM files_tracked WHERE tag_name = ?", tagName)
 	if err != nil {
@@ -125,11 +123,10 @@ func GetFilesByTag(tagName string) ([]string, error) {
 
 // GetAllTagsWithMeta recupera o dicionário completo de tags e seus metadados para varreduras de listagem.
 func GetAllTagsWithMeta() (map[string]TagMeta, error) {
-	db, err := Open()
+	db, err := GetDB()
 	if err != nil {
 		return nil, err
 	}
-	defer db.Close()
 
 	rows, err := db.Query("SELECT name, type, repo_id, repo_name, git_root FROM tags")
 	if err != nil {
