@@ -23,11 +23,10 @@ type TagBackup struct {
 
 // DumpGitRepositoryData extrai do banco todos os dados atrelados a um repositório Git específico.
 func DumpGitRepositoryData(repoID string) (BackupSchema, error) {
-	db, err := Open()
+	db, err := GetDB()
 	if err != nil {
 		return BackupSchema{}, err
 	}
-	defer db.Close()
 
 	backup := BackupSchema{
 		RepoID: repoID,
@@ -103,11 +102,10 @@ func DumpGitRepositoryData(repoID string) (BackupSchema, error) {
 
 // RestoreGitRepositoryData limpa e injeta atomicamente os dados do backup de volta no banco.
 func RestoreGitRepositoryData(currentGitRoot string, backup BackupSchema) error {
-	db, err := Open()
+	db, err := GetDB()
 	if err != nil {
 		return err
 	}
-	defer db.Close()
 
 	tx, err := db.Begin()
 	if err != nil {

@@ -10,11 +10,10 @@ import (
 
 // TrackPaths recebe caminhos já processados pelo resolver e insere no rastreamento.
 func TrackPaths(tagName string, targets []string) error {
-	db, err := Open()
+	db, err := GetDB()
 	if err != nil {
 		return err
 	}
-	defer db.Close()
 
 	tx, err := db.Begin()
 	if err != nil {
@@ -62,11 +61,10 @@ func TrackPaths(tagName string, targets []string) error {
 
 // UntrackPath remove um caminho pré-processado da tag.
 func UntrackPath(tagName, targetPath string) error {
-	db, err := Open()
+	db, err := GetDB()
 	if err != nil {
 		return err
 	}
-	defer db.Close()
 
 	res, err := db.Exec("DELETE FROM files_tracked WHERE tag_name = ? AND path = ?", tagName, targetPath)
 	if err != nil {

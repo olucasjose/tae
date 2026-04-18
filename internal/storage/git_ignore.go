@@ -10,11 +10,10 @@ import (
 // GitIgnorePaths adiciona os caminhos alvo (já processados como relativos à raiz do git)
 // na denylist persistente do repositório específico.
 func GitIgnorePaths(repoID string, targets []string) error {
-	db, err := Open()
+	db, err := GetDB()
 	if err != nil {
 		return err
 	}
-	defer db.Close()
 
 	tx, err := db.Begin()
 	if err != nil {
@@ -39,11 +38,10 @@ func GitIgnorePaths(repoID string, targets []string) error {
 
 // GetGitIgnoredPaths retorna um hash map rápido contendo a denylist do repositório.
 func GetGitIgnoredPaths(repoID string) (map[string]bool, error) {
-	db, err := Open()
+	db, err := GetDB()
 	if err != nil {
 		return nil, err
 	}
-	defer db.Close()
 
 	rows, err := db.Query("SELECT path FROM git_ignored WHERE repo_id = ?", repoID)
 	if err != nil {
@@ -64,11 +62,10 @@ func GetGitIgnoredPaths(repoID string) (map[string]bool, error) {
 
 // UnignoreGitPaths remove caminhos da denylist do repositório.
 func UnignoreGitPaths(repoID string, targets []string) error {
-	db, err := Open()
+	db, err := GetDB()
 	if err != nil {
 		return err
 	}
-	defer db.Close()
 
 	tx, err := db.Begin()
 	if err != nil {

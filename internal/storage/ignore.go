@@ -10,11 +10,10 @@ import (
 
 // IgnorePaths move alvos pré-processados para a denylist.
 func IgnorePaths(tagName string, targets []string) error {
-	db, err := Open()
+	db, err := GetDB()
 	if err != nil {
 		return err
 	}
-	defer db.Close()
 
 	tx, err := db.Begin()
 	if err != nil {
@@ -62,11 +61,10 @@ func IgnorePaths(tagName string, targets []string) error {
 
 // GetIgnoredPaths carrega o Exclusion Index da tag em um mapa O(1).
 func GetIgnoredPaths(tagName string) (map[string]bool, error) {
-	db, err := Open()
+	db, err := GetDB()
 	if err != nil {
 		return nil, err
 	}
-	defer db.Close()
 
 	rows, err := db.Query("SELECT path FROM files_ignored WHERE tag_name = ?", tagName)
 	if err != nil {
@@ -87,11 +85,10 @@ func GetIgnoredPaths(tagName string) (map[string]bool, error) {
 
 // UnignorePaths remove alvos pré-processados da denylist.
 func UnignorePaths(tagName string, targets []string) error {
-	db, err := Open()
+	db, err := GetDB()
 	if err != nil {
 		return err
 	}
-	defer db.Close()
 
 	tx, err := db.Begin()
 	if err != nil {

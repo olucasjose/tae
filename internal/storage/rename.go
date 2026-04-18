@@ -10,11 +10,10 @@ import (
 
 // RenameTag transfere atomicamente os índices de uma tag para um novo nome.
 func RenameTag(oldName, newName string) error {
-	db, err := Open()
+	db, err := GetDB()
 	if err != nil {
 		return err
 	}
-	defer db.Close()
 
 	tx, err := db.Begin()
 	if err != nil {
