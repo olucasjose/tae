@@ -7,12 +7,14 @@ import (
 	"fmt"
 	"os"
 
+	"tae/internal/storage"
+
 	"github.com/spf13/cobra"
 )
 
 var rootCmd = &cobra.Command{
 	Use:           "tae",
-	Version:       "6.2.0",
+	Version:       "6.3.0",
 	Short:         "Tae é um utilitário CLI para extração e empacotamento de código",
 	SilenceErrors: true, // Gina: Impede que o Cobra faça echo do erro, nós controlaremos isso no Execute()
 	SilenceUsage:  true, // Gina: Impede que o menu de ajuda seja impresso toda vez que um comando falhar
@@ -84,7 +86,16 @@ Use "{{.CommandPath}} [comando] --help" para mais informações sobre um comando
 }
 
 func Execute() {
-	if err := rootCmd.Execute(); err != nil {
+	// Captura o erro da execução do Cobra, mas não sai imediatamente
+	err := rootCmd.Execute()
+
+	// Garantia absoluta: Fecha o pool do banco e sincroniza o WAL no disco
+	// antes de qualquer encerramento abrupto do processo.
+	if dbErr := storage.CloseDB(); dbErr != nil {
+		fmt.Fprintf(os.Stderr, "Aviso: Falha ao fechar o banco de dados: %v\n", dbErr)
+	}
+
+	if err != nil {
 		// Ponto único de saída de erro da aplicação
 		fmt.Fprintf(os.Stderr, "Erro: %v\n", err)
 		os.Exit(1)
