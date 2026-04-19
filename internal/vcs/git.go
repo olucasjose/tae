@@ -167,17 +167,23 @@ func GetRelativePath(target string) (string, error) {
 // GetChangedFiles retorna a lista e o status de arquivos alterados entre dois commits
 func GetChangedFiles(c1, c2 string) ([]DiffStatus, error) {
 	cmd := exec.Command("git", "diff", "--name-status", c1, c2)
-	var out, stderr bytes.Buffer
-	cmd.Stdout = &out
+	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 
-	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("erro no git diff:\n%s", stderr.String())
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, fmt.Errorf("falha ao criar pipe para git diff: %w", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("erro ao iniciar git diff:\n%s", stderr.String())
 	}
 
 	var changes []DiffStatus
-	for _, line := range strings.Split(out.String(), "\n") {
-		line = strings.TrimSpace(line)
+	scanner := bufio.NewScanner(stdout)
+	
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
 		if line == "" {
 			continue
 		}
@@ -206,23 +212,50 @@ func GetChangedFiles(c1, c2 string) ([]DiffStatus, error) {
 			IsRename: isRename,
 		})
 	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("erro na leitura da stream do git diff: %w", err)
+	}
+
+	if err := cmd.Wait(); err != nil {
+		return nil, fmt.Errorf("erro no git diff:\n%s", stderr.String())
+	}
+
 	return changes, nil
 }
 
 // ListTree lista a árvore de arquivos de um commit
 func ListTree(commit string) ([]string, error) {
-	gitExec := exec.Command("git", "ls-tree", "-r", "--name-only", commit)
-	var out bytes.Buffer
-	gitExec.Stdout = &out
-	if err := gitExec.Run(); err != nil {
-		return nil, fmt.Errorf("erro ao ler árvore do Git. Verifique o repositório e o hash")
+	cmd := exec.Command("git", "ls-tree", "-r", "--name-only", commit)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, fmt.Errorf("falha ao criar pipe para git ls-tree: %w", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("erro ao iniciar git ls-tree:\n%s", stderr.String())
 	}
 
 	var files []string
-	for _, f := range strings.Split(strings.TrimSpace(out.String()), "\n") {
+	scanner := bufio.NewScanner(stdout)
+	
+	for scanner.Scan() {
+		f := strings.TrimSpace(scanner.Text())
 		if f != "" {
 			files = append(files, f)
 		}
 	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("erro na leitura da stream do git ls-tree: %w", err)
+	}
+
+	if err := cmd.Wait(); err != nil {
+		return nil, fmt.Errorf("erro ao ler árvore do Git. Verifique o repositório e o hash:\n%s", stderr.String())
+	}
+
 	return files, nil
 }
