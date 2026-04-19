@@ -37,7 +37,7 @@ func resolveRelPath(path, basePrefix string, flattenMap map[string]string) strin
 	return relPath
 }
 
-// writeContent agora recebe a instância ativa do BatchReader do worker atual
+// writeContent recebe a instância ativa do BatchReader do worker atual
 func writeContent(path, gitCommit string, w io.Writer, br *vcs.BatchReader) error {
 	if gitCommit != "" && br != nil {
 		return br.ReadBlob(gitCommit, path, w)
@@ -55,8 +55,18 @@ func writeContent(path, gitCommit string, w io.Writer, br *vcs.BatchReader) erro
 // ExportZip orquestra múltiplos workers para gerar lotes ZIP de forma concorrente
 func ExportZip(chunks []grouper.ExportChunk, workers int, opts ExportOptions) {
 	jobs := make(chan grouper.ExportChunk, len(chunks))
+	logChan := make(chan string, 100)
 	var wg sync.WaitGroup
-	var printMu sync.Mutex
+	var logWg sync.WaitGroup
+
+	// Goroutine dedicada para I/O no terminal (Fan-In)
+	logWg.Add(1)
+	go func() {
+		defer logWg.Done()
+		for msg := range logChan {
+			fmt.Print(msg)
+		}
+	}()
 
 	var gitRoot string
 	if opts.GitCommit != "" {
@@ -73,9 +83,7 @@ func ExportZip(chunks []grouper.ExportChunk, workers int, opts ExportOptions) {
 				var err error
 				br, err = vcs.NewBatchReader(gitRoot)
 				if err != nil {
-					printMu.Lock()
-					fmt.Printf("Falha crítica ao iniciar worker do Git: %v\n", err)
-					printMu.Unlock()
+					logChan <- fmt.Sprintf("Falha crítica ao iniciar worker do Git: %v\n", err)
 					return
 				}
 				defer br.Close()
@@ -85,19 +93,19 @@ func ExportZip(chunks []grouper.ExportChunk, workers int, opts ExportOptions) {
 				zipPath := filepath.Join(opts.DestDir, chunk.ZipName)
 				err := buildZip(zipPath, chunk.Files, opts, br)
 
-				printMu.Lock()
+				var sb strings.Builder
 				if err != nil {
-					fmt.Printf("Erro ao criar %s: %v\n", chunk.ZipName, err)
+					sb.WriteString(fmt.Sprintf("Erro ao criar %s: %v\n", chunk.ZipName, err))
 				} else {
-					fmt.Printf("  -> %s gerado (%d arquivos)\n", chunk.ZipName, len(chunk.Files))
+					sb.WriteString(fmt.Sprintf("  -> %s gerado (%d arquivos)\n", chunk.ZipName, len(chunk.Files)))
 					if !opts.Quiet {
 						for _, p := range chunk.Files {
 							rel := resolveRelPath(p, opts.BasePrefix, opts.FlattenMap)
-							fmt.Printf("      - %s\n", rel)
+							sb.WriteString(fmt.Sprintf("      - %s\n", rel))
 						}
 					}
 				}
-				printMu.Unlock()
+				logChan <- sb.String()
 			}
 		}()
 	}
@@ -106,7 +114,9 @@ func ExportZip(chunks []grouper.ExportChunk, workers int, opts ExportOptions) {
 		jobs <- c
 	}
 	close(jobs)
-	wg.Wait()
+	wg.Wait()      // Aguarda todos os workers finalizarem a compressão
+	close(logChan) // Sinaliza à goroutine de log que não haverá mais envios
+	logWg.Wait()   // Aguarda o flush final no terminal
 }
 
 func buildZip(zipPath string, files []string, opts ExportOptions, br *vcs.BatchReader) error {
@@ -155,8 +165,18 @@ func buildZip(zipPath string, files []string, opts ExportOptions, br *vcs.BatchR
 // ExportFlat orquestra cópias planas de arquivos reconstruindo ou nivelando a árvore
 func ExportFlat(files []string, workers int, opts ExportOptions) {
 	jobs := make(chan string, len(files))
+	logChan := make(chan string, 100)
 	var wg sync.WaitGroup
-	var printMu sync.Mutex
+	var logWg sync.WaitGroup
+
+	// Goroutine dedicada para I/O no terminal (Fan-In)
+	logWg.Add(1)
+	go func() {
+		defer logWg.Done()
+		for msg := range logChan {
+			fmt.Print(msg)
+		}
+	}()
 
 	var gitRoot string
 	if opts.GitCommit != "" {
@@ -173,9 +193,7 @@ func ExportFlat(files []string, workers int, opts ExportOptions) {
 				var err error
 				br, err = vcs.NewBatchReader(gitRoot)
 				if err != nil {
-					printMu.Lock()
-					fmt.Printf("Falha crítica ao iniciar worker do Git: %v\n", err)
-					printMu.Unlock()
+					logChan <- fmt.Sprintf("Falha crítica ao iniciar worker do Git: %v\n", err)
 					return
 				}
 				defer br.Close()
@@ -194,24 +212,22 @@ func ExportFlat(files []string, workers int, opts ExportOptions) {
 
 				var errOut error
 				if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
-					errOut = fmt.Errorf("Erro de I/O em diretório %s: %v", path, err)
+					errOut = fmt.Errorf("Erro de I/O em diretório %s: %v\n", path, err)
 				} else {
 					destFile, err := os.Create(targetPath)
 					if err != nil {
-						errOut = fmt.Errorf("Erro ao criar %s: %v", path, err)
+						errOut = fmt.Errorf("Erro ao criar %s: %v\n", path, err)
 					} else {
 						errOut = writeContent(path, opts.GitCommit, destFile, br)
 						destFile.Close()
 					}
 				}
 
-				printMu.Lock()
 				if errOut != nil {
-					fmt.Println(errOut)
+					logChan <- fmt.Sprintf("%v\n", errOut)
 				} else if !opts.Quiet {
-					fmt.Printf("  -> %s\n", targetPath)
+					logChan <- fmt.Sprintf("  -> %s\n", targetPath)
 				}
-				printMu.Unlock()
 			}
 		}()
 	}
@@ -220,5 +236,7 @@ func ExportFlat(files []string, workers int, opts ExportOptions) {
 		jobs <- f
 	}
 	close(jobs)
-	wg.Wait()
+	wg.Wait()      // Aguarda todos os workers concluírem a cópia
+	close(logChan) // Sinaliza encerramento de logs
+	logWg.Wait()   // Aguarda impressão das mensagens finais
 }
