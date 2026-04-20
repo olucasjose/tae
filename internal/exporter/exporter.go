@@ -138,7 +138,7 @@ func buildZip(zipPath string, files []string, opts ExportOptions, br *vcs.BatchR
 		if opts.AppendTxt {
 			relPath += ".txt"
 		}
-		
+
 		var writer io.Writer
 
 		if opts.GitCommit == "" {
@@ -219,7 +219,7 @@ func ExportFlat(files []string, workers int, opts ExportOptions) {
 				if opts.AppendTxt {
 					relPath += ".txt"
 				}
-				
+
 				targetPath := filepath.Join(opts.DestDir, relPath)
 
 				var errOut error

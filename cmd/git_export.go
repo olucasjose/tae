@@ -6,13 +6,13 @@ package cmd
 import (
 	"bytes"
 	"fmt"
-	"time"
-	"path/filepath"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"tae/internal/vcs"
+	"time"
 
 	"tae/internal/exporter"
 	"tae/internal/filter"
@@ -31,7 +31,7 @@ var (
 	gitExportFlatten  bool
 	gitExportQuiet    bool
 	gitExportTxt      bool
-	gitExportSingle bool
+	gitExportSingle   bool
 )
 
 var gitExportCmd = &cobra.Command{
@@ -46,8 +46,8 @@ var gitExportCmd = &cobra.Command{
 		var out bytes.Buffer
 		gitExec.Stdout = &out
 		if gitExportSingle && (gitExportZip || gitExportFlatten) {
-					return fmt.Errorf("a flag --single-file (-s) é exclusiva e não pode ser usada simultaneamente com --zip ou --flatten")
-				}
+			return fmt.Errorf("a flag --single-file (-s) é exclusiva e não pode ser usada simultaneamente com --zip ou --flatten")
+		}
 		if err := gitExec.Run(); err != nil {
 			return fmt.Errorf("erro ao ler árvore do Git. Verifique o repositório e o hash")
 		}
@@ -103,17 +103,17 @@ var gitExportCmd = &cobra.Command{
 
 		if gitExportSingle {
 			timestamp := time.Now().Format("20060102_150405")
-						fileName := fmt.Sprintf("%s_%s.txt", commit, timestamp)
-						fullPath := filepath.Join(destPath, fileName)
-			
-						fmt.Printf("Iniciando exportação Single-File (Single File Style) do commit %s. %d arquivo(s) para '%s'...\n", commit, len(files), fullPath)
-						if !gitExportQuiet {
-							fmt.Printf("[Raiz Comum: %s]\n\n", basePrefix)
-						}
-						if err := exporter.ExportSingleFile(fullPath, files, opts); err != nil {
-							return err
-						}
-						fmt.Printf("\nSucesso! Arquivo consolidado gerado em '%s'.\n", fullPath)
+			fileName := fmt.Sprintf("%s_%s.txt", commit, timestamp)
+			fullPath := filepath.Join(destPath, fileName)
+
+			fmt.Printf("Iniciando exportação Single-File (Single File Style) do commit %s. %d arquivo(s) para '%s'...\n", commit, len(files), fullPath)
+			if !gitExportQuiet {
+				fmt.Printf("[Raiz Comum: %s]\n\n", basePrefix)
+			}
+			if err := exporter.ExportSingleFile(fullPath, files, opts); err != nil {
+				return err
+			}
+			fmt.Printf("\nSucesso! Arquivo consolidado gerado em '%s'.\n", fullPath)
 		} else if gitExportZip {
 			repoName := vcs.GetRepoName()
 			baseName := fmt.Sprintf("%s-%s", repoName, commit)

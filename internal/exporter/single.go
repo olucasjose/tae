@@ -45,10 +45,10 @@ func ExportSingleFile(destPath string, files []string, opts ExportOptions) error
 	fmt.Fprintln(outFile, "================================================================")
 	fmt.Fprintln(outFile, "\n# Estrutura de Diretórios")
 	fmt.Fprintln(outFile, "```")
-	
+
 	rootNode := render.BuildVisualTree(files, opts.BasePrefix)
 	render.PrintTree(outFile, rootNode, "", 0, 0, nil)
-	
+
 	fmt.Fprintln(outFile, "```\n")
 	fmt.Fprintln(outFile, "# Arquivos do Escopo")
 
@@ -73,7 +73,7 @@ func ExportSingleFile(destPath string, files []string, opts ExportOptions) error
 		} else {
 			fmt.Fprintln(outFile, "") // Pula uma linha no final para não emendar com a próxima assinatura
 		}
-		
+
 		if !opts.Quiet {
 			fmt.Printf("  -> Anexado: %s\n", relPath)
 		}

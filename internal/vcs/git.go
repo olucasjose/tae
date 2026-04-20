@@ -181,7 +181,7 @@ func GetChangedFiles(c1, c2 string) ([]DiffStatus, error) {
 
 	var changes []DiffStatus
 	scanner := bufio.NewScanner(stdout)
-	
+
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" {
@@ -241,7 +241,7 @@ func ListTree(commit string) ([]string, error) {
 
 	var files []string
 	scanner := bufio.NewScanner(stdout)
-	
+
 	for scanner.Scan() {
 		f := strings.TrimSpace(scanner.Text())
 		if f != "" {
