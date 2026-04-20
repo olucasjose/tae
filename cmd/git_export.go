@@ -106,7 +106,7 @@ var gitExportCmd = &cobra.Command{
 						fileName := fmt.Sprintf("%s_%s.txt", commit, timestamp)
 						fullPath := filepath.Join(destPath, fileName)
 			
-						fmt.Printf("Iniciando exportação Single-File (Repomix Style) do commit %s. %d arquivo(s) para '%s'...\n", commit, len(files), fullPath)
+						fmt.Printf("Iniciando exportação Single-File (Single File Style) do commit %s. %d arquivo(s) para '%s'...\n", commit, len(files), fullPath)
 						if !gitExportQuiet {
 							fmt.Printf("[Raiz Comum: %s]\n\n", basePrefix)
 						}
@@ -142,6 +142,6 @@ func init() {
 	gitExportCmd.Flags().BoolVarP(&gitExportFlatten, "flatten", "f", false, "Exporta todos os arquivos no mesmo nível (sem pastas), resolvendo colisões de nomes")
 	gitExportCmd.Flags().BoolVarP(&gitExportQuiet, "quiet", "q", false, "Oculta a listagem individual dos arquivos no console")
 	gitExportCmd.Flags().BoolVar(&gitExportTxt, "txt", false, "Adiciona a extensão .txt a todos os arquivos exportados")
-	gitExportCmd.Flags().BoolVarP(&gitExportSingle, "single-file", "s", false, "Exporta todos os arquivos em um único arquivo de texto plano (Repomix Style)")
+	gitExportCmd.Flags().BoolVarP(&gitExportSingle, "single-file", "s", false, "Exporta todos os arquivos em um único arquivo de texto plano (Single File Style)")
 	gitCmd.AddCommand(gitExportCmd)
 }

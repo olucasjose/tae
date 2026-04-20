@@ -109,7 +109,7 @@ var exportCmd = &cobra.Command{
 					fileName := fmt.Sprintf("%s_%s.txt", tagName, timestamp)
 					fullPath := filepath.Join(destPath, fileName)
 		
-					fmt.Printf("Iniciando exportação Single-File (Repomix Style). %d arquivo(s) expandido(s) para '%s'...\n", len(files), fullPath)
+					fmt.Printf("Iniciando exportação Single-File (Single File Style). %d arquivo(s) expandido(s) para '%s'...\n", len(files), fullPath)
 					if !exportQuiet {
 						fmt.Printf("[Raiz Comum: %s]\n\n", basePrefix)
 					}
@@ -141,6 +141,6 @@ func init() {
 	exportCmd.Flags().BoolVarP(&exportFlatten, "flatten", "f", false, "Exporta todos os arquivos no mesmo nível (sem pastas), resolvendo colisões de nomes")
 	exportCmd.Flags().BoolVarP(&exportQuiet, "quiet", "q", false, "Oculta a listagem individual dos arquivos no console")
 	exportCmd.Flags().BoolVar(&exportTxt, "txt", false, "Adiciona a extensão .txt a todos os arquivos exportados")
-	exportCmd.Flags().BoolVarP(&exportSingle, "single-file", "s", false, "Exporta todos os arquivos em um único arquivo de texto plano (Repomix Style)")
+	exportCmd.Flags().BoolVarP(&exportSingle, "single-file", "s", false, "Exporta todos os arquivos em um único arquivo de texto plano (Single File Style)")
 	rootCmd.AddCommand(exportCmd)
 }

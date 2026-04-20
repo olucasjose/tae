@@ -38,7 +38,7 @@ func ExportSingleFile(destPath string, files []string, opts ExportOptions) error
 
 	// 1. Escreve Cabeçalho e Metadados
 	fmt.Fprintln(outFile, "================================================================")
-	fmt.Fprintln(outFile, " TAE Export - Repomix Style")
+	fmt.Fprintln(outFile, " TAE Export - Single File Style")
 	if opts.GitCommit != "" {
 		fmt.Fprintf(outFile, " Commit Original: %s\n", opts.GitCommit)
 	}
