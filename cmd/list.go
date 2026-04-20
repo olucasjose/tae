@@ -204,7 +204,7 @@ var listCmd = &cobra.Command{
 
 		if listTree {
 			rootNode := render.BuildVisualTree(files, basePrefix)
-			render.PrintTree(rootNode, "", 0, listDepth, ignorePatterns)
+			render.PrintTree(os.Stdout, rootNode, "", 0, listDepth, ignorePatterns)
 		} else {
 			for _, f := range files {
 				relPath := strings.TrimPrefix(f, basePrefix)

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"io"
 
 	"tae/internal/filter"
 )
@@ -74,8 +75,8 @@ func BuildVisualTree(files []string, basePrefix string) *TreeNode {
 	return root
 }
 
-// PrintTree imprime a árvore com as ramificações de terminal.
-func PrintTree(node *TreeNode, prefix string, depth, maxDepth int, ignorePatterns []string) {
+// PrintTree imprime a árvore com as ramificações de terminal em um io.Writer qualquer.
+func PrintTree(w io.Writer, node *TreeNode, prefix string, depth, maxDepth int, ignorePatterns []string) {
 	if maxDepth > 0 && depth > maxDepth {
 		return
 	}
@@ -106,14 +107,14 @@ func PrintTree(node *TreeNode, prefix string, depth, maxDepth int, ignorePattern
 			connector = "└── "
 		}
 
-		fmt.Printf("%s%s%s\n", prefix, connector, child.Name)
+		fmt.Fprintf(w, "%s%s%s\n", prefix, connector, child.Name)
 
 		if child.IsDir {
 			extension := "│   "
 			if isLast {
 				extension = "    "
 			}
-			PrintTree(child, prefix+extension, depth+1, maxDepth, ignorePatterns)
+			PrintTree(w, child, prefix+extension, depth+1, maxDepth, ignorePatterns)
 		}
 	}
 }

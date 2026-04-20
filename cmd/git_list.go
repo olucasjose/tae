@@ -11,6 +11,7 @@ import (
 	"tae/internal/render"
 	"tae/internal/storage"
 	"tae/internal/vcs"
+	"os"
 
 	"github.com/spf13/cobra"
 )
@@ -91,7 +92,7 @@ var gitListCmd = &cobra.Command{
 
 		if gitListTree {
 			rootNode := render.BuildVisualTree(files, "")
-			render.PrintTree(rootNode, "", 0, gitListDepth, ignorePatterns)
+			render.PrintTree(os.Stdout, rootNode, "", 0, gitListDepth, ignorePatterns)
 		} else {
 			for _, f := range files {
 				if !filter.MatchPattern(f, ignorePatterns) {
