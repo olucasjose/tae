@@ -23,6 +23,7 @@ type ExportOptions struct {
 	FlattenMap map[string]string
 	Quiet      bool
 	GitCommit  string // Se preenchido, o pipeline lê do histórico do Git em vez do disco rígido
+	AppendTxt  bool   // Adiciona a extensão .txt nos caminhos de saída
 }
 
 func resolveRelPath(path, basePrefix string, flattenMap map[string]string) string {
@@ -101,6 +102,9 @@ func ExportZip(chunks []grouper.ExportChunk, workers int, opts ExportOptions) {
 					if !opts.Quiet {
 						for _, p := range chunk.Files {
 							rel := resolveRelPath(p, opts.BasePrefix, opts.FlattenMap)
+							if opts.AppendTxt {
+								rel += ".txt"
+							}
 							sb.WriteString(fmt.Sprintf("      - %s\n", rel))
 						}
 					}
@@ -131,6 +135,10 @@ func buildZip(zipPath string, files []string, opts ExportOptions, br *vcs.BatchR
 
 	for _, path := range files {
 		relPath := resolveRelPath(path, opts.BasePrefix, opts.FlattenMap)
+		if opts.AppendTxt {
+			relPath += ".txt"
+		}
+		
 		var writer io.Writer
 
 		if opts.GitCommit == "" {
@@ -208,6 +216,10 @@ func ExportFlat(files []string, workers int, opts ExportOptions) {
 				}
 
 				relPath := resolveRelPath(path, opts.BasePrefix, opts.FlattenMap)
+				if opts.AppendTxt {
+					relPath += ".txt"
+				}
+				
 				targetPath := filepath.Join(opts.DestDir, relPath)
 
 				var errOut error

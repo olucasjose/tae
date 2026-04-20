@@ -28,6 +28,7 @@ var (
 	gitExportNoIgnore bool
 	gitExportFlatten  bool
 	gitExportQuiet    bool
+	gitExportTxt      bool
 )
 
 var gitExportCmd = &cobra.Command{
@@ -91,6 +92,7 @@ var gitExportCmd = &cobra.Command{
 			FlattenMap: flattenMap,
 			Quiet:      gitExportQuiet,
 			GitCommit:  commit,
+			AppendTxt:  gitExportTxt,
 		}
 
 		if gitExportZip {
@@ -120,5 +122,6 @@ func init() {
 	gitExportCmd.Flags().BoolVar(&gitExportNoIgnore, "no-ignore", false, "Ignora a denylist do repositório e exporta todos os arquivos")
 	gitExportCmd.Flags().BoolVarP(&gitExportFlatten, "flatten", "f", false, "Exporta todos os arquivos no mesmo nível (sem pastas), resolvendo colisões de nomes")
 	gitExportCmd.Flags().BoolVarP(&gitExportQuiet, "quiet", "q", false, "Oculta a listagem individual dos arquivos no console")
+	gitExportCmd.Flags().BoolVar(&gitExportTxt, "txt", false, "Adiciona a extensão .txt a todos os arquivos exportados")
 	gitCmd.AddCommand(gitExportCmd)
 }

@@ -23,6 +23,7 @@ var (
 	exportMerge   bool
 	exportFlatten bool
 	exportQuiet   bool
+	exportTxt     bool
 )
 
 var exportCmd = &cobra.Command{
@@ -94,6 +95,7 @@ var exportCmd = &cobra.Command{
 			BasePrefix: basePrefix,
 			FlattenMap: flattenMap,
 			Quiet:      exportQuiet,
+			AppendTxt:  exportTxt,
 		}
 
 		if exportZip {
@@ -113,12 +115,12 @@ var exportCmd = &cobra.Command{
 	},
 }
 
-// Nota da Gina: Funções auxiliares mantidas intactas, ajuste apenas o os.Stderr interno para print para evitar side-effects
 func init() {
 	exportCmd.Flags().BoolVarP(&exportZip, "zip", "z", false, "Exporta e compacta os arquivos em formato .zip")
 	exportCmd.Flags().IntVarP(&exportLimit, "limit", "l", 0, "Teto máximo de arquivos por zip (requer -z)")
 	exportCmd.Flags().BoolVarP(&exportMerge, "merge", "m", false, "Mescla zips subpopulados sequencialmente mantendo o limite (requer -z e -l)")
 	exportCmd.Flags().BoolVarP(&exportFlatten, "flatten", "f", false, "Exporta todos os arquivos no mesmo nível (sem pastas), resolvendo colisões de nomes")
 	exportCmd.Flags().BoolVarP(&exportQuiet, "quiet", "q", false, "Oculta a listagem individual dos arquivos no console")
+	exportCmd.Flags().BoolVar(&exportTxt, "txt", false, "Adiciona a extensão .txt a todos os arquivos exportados")
 	rootCmd.AddCommand(exportCmd)
 }

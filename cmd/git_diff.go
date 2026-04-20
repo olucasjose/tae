@@ -22,6 +22,7 @@ var (
 	diffLimit    int
 	diffMerge    bool
 	diffNoIgnore bool
+	diffTxt      bool
 )
 
 var gitDiffCmd = &cobra.Command{
@@ -90,6 +91,7 @@ var gitDiffCmd = &cobra.Command{
 			DestDir:    ".", // diff sempre exporta no diretório atual
 			BasePrefix: basePrefix,
 			GitCommit:  commit2,
+			AppendTxt:  diffTxt,
 		}
 		exporter.ExportZip(chunks, numWorkers, opts)
 
@@ -102,5 +104,6 @@ func init() {
 	gitDiffCmd.Flags().IntVarP(&diffLimit, "limit", "l", 0, "Teto máximo de arquivos por zip")
 	gitDiffCmd.Flags().BoolVarP(&diffMerge, "merge", "m", false, "Mescla zips subpopulados mantendo o limite (requer -l)")
 	gitDiffCmd.Flags().BoolVar(&diffNoIgnore, "no-ignore", false, "Ignora a denylist do repositório e empacota todos os arquivos alterados")
+	gitDiffCmd.Flags().BoolVar(&diffTxt, "txt", false, "Adiciona a extensão .txt a todos os arquivos exportados")
 	gitCmd.AddCommand(gitDiffCmd)
 }
