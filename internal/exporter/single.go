@@ -4,11 +4,14 @@
 package exporter
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
+	"tae/internal/config"
 	"tae/internal/render"
 	"tae/internal/vcs"
 )
@@ -16,6 +19,11 @@ import (
 // ExportSingleFile consolida todos os arquivos monitorados em um único arquivo texto plano otimizado para LLMs.
 // É executado de forma sequencial intencionalmente para garantir ordenação determinística e evitar consumo excessivo de RAM.
 func ExportSingleFile(destPath string, files []string, opts ExportOptions) error {
+	filter, err := config.LoadFilter()
+	if err != nil {
+		return fmt.Errorf("falha na camada de configuração: %w", err)
+	}
+
 	if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
 		return fmt.Errorf("erro de I/O ao criar diretório base: %w", err)
 	}
@@ -67,6 +75,8 @@ func ExportSingleFile(destPath string, files []string, opts ExportOptions) error
 		return dirI < dirJ
 	})
 
+	reader := bufio.NewReader(os.Stdin)
+
 	// 2. Despeja o conteúdo de cada arquivo sequencialmente
 	for _, path := range files {
 		relPath := resolveRelPath(path, opts.BasePrefix, opts.FlattenMap)
@@ -78,15 +88,54 @@ func ExportSingleFile(destPath string, files []string, opts ExportOptions) error
 		fmt.Fprintf(outFile, "File: %s\n", relPath)
 		fmt.Fprintln(outFile, "================================================================")
 
+		ext := strings.ToLower(filepath.Ext(path))
+		skip := false
+
+		if ext != "" {
+			if filter.Blocked[ext] {
+				skip = true
+			} else if !filter.Allowed[ext] {
+				if opts.Quiet {
+					// Em modo quiet, omite por segurança mas não polui o JSON com regras inferidas
+					skip = true
+				} else {
+					fmt.Printf("\n[?] A extensão '%s' do arquivo '%s' é desconhecida.\n", ext, relPath)
+					fmt.Printf("Deseja incluir seu conteúdo e PERMITIR essa extensão no futuro? [s/N]: ")
+					
+					response, _ := reader.ReadString('\n')
+					response = strings.TrimSpace(strings.ToLower(response))
+					
+					if response == "s" || response == "y" {
+						if err := filter.LearnExtension(ext, false); err != nil {
+							fmt.Printf("Aviso: Falha ao salvar regra de permissão: %v\n", err)
+						}
+						skip = false
+					} else {
+						if err := filter.LearnExtension(ext, true); err != nil {
+							fmt.Printf("Aviso: Falha ao salvar regra de bloqueio: %v\n", err)
+						}
+						skip = true
+					}
+				}
+			}
+		}
+
+		if skip {
+			fmt.Fprintln(outFile, "[Conteúdo de arquivo omitido: extensão não-texto bloqueada/desconhecida]")
+			if !opts.Quiet {
+				fmt.Printf("  -> Omitido: %s\n", relPath)
+			}
+			continue
+		}
+
 		err := writeContent(path, opts.GitCommit, outFile, br)
 		if err != nil {
-			// Não abortamos o pipeline por 1 arquivo quebrado. Logamos o erro in-file para o LLM ter contexto.
 			fmt.Fprintf(outFile, "[Erro de I/O ao ler conteúdo deste arquivo: %v]\n", err)
 			if !opts.Quiet {
 				fmt.Printf("Aviso: Falha ao ler '%s': %v\n", relPath, err)
 			}
 		} else {
-			fmt.Fprintln(outFile, "") // Pula uma linha no final para não emendar com a próxima assinatura
+			fmt.Fprintln(outFile, "")
 		}
 
 		if !opts.Quiet {
