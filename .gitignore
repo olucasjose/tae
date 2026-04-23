@@ -1,20 +1,33 @@
-# Binários Compilados
-# O nome do seu executável (baseado no seu 'module tae')
-tae
-*.exe
-*.exe~
-*.dll
+```
+# Go build artifacts
+*.o
+*.a
 *.so
 *.dylib
+*.dll
+*.exe
 
-# Pastas de Ferramentas e IDEs
-.idea/
+# Go cache and tools
+go.mod.lock
+go.sum.lock
+.gocache/
+.cover/
+
+# Dependencies
+vendor/
+
+# Logs and temp files
+*.log
+*.tmp
+
+# Editors
 .vscode/
+.idea/
 *.swp
 *.swo
 
-# Arquivos de Log e Temporários
-*.log
-*.diff
-diff/
-vendor/
+# Environment
+.env
+.env.local
+*.env.*
+```
