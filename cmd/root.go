@@ -85,17 +85,13 @@ Use "{{.CommandPath}} [comando] --help" para mais informações sobre um comando
 }
 
 func Execute() {
-	// Captura o erro da execução do Cobra, mas não sai imediatamente
+	// Garante o fechamento do banco e sincronização do WAL antes de encerrar
 	err := rootCmd.Execute()
-
-	// Garantia absoluta: Fecha o pool do banco e sincroniza o WAL no disco
-	// antes de qualquer encerramento abrupto do processo.
 	if dbErr := storage.CloseDB(); dbErr != nil {
 		fmt.Fprintf(os.Stderr, "Aviso: Falha ao fechar o banco de dados: %v\n", dbErr)
 	}
 
 	if err != nil {
-		// Ponto único de saída de erro da aplicação
 		fmt.Fprintf(os.Stderr, "Erro: %v\n", err)
 		os.Exit(1)
 	}

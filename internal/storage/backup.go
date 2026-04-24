@@ -34,7 +34,6 @@ func DumpGitRepositoryData(repoID string) (BackupSchema, error) {
 		Tags:   make(map[string]TagBackup),
 	}
 
-	// Puxa Denylist do Repo
 	rows, err := db.Query("SELECT path FROM git_ignored WHERE repo_id = ?", repoID)
 	if err != nil {
 		return backup, fmt.Errorf("erro ao consultar denylist do repo: %w", err)
@@ -49,7 +48,6 @@ func DumpGitRepositoryData(repoID string) (BackupSchema, error) {
 	}
 	rows.Close()
 
-	// Puxa Tags do Repo
 	tagRows, err := db.Query("SELECT name, type, repo_name, git_root FROM tags WHERE type = ? AND repo_id = ?", TagTypeGit, repoID)
 	if err != nil {
 		return backup, fmt.Errorf("erro ao consultar tags do repo: %w", err)
@@ -76,7 +74,6 @@ func DumpGitRepositoryData(repoID string) (BackupSchema, error) {
 
 		tb := TagBackup{Meta: meta}
 
-		// Puxa Arquivos Rastreados
 		fRows, err := db.Query("SELECT path FROM files_tracked WHERE tag_name = ?", tagName)
 		if err != nil {
 			return backup, fmt.Errorf("erro ao consultar arquivos rastreados da tag '%s': %w", tagName, err)
@@ -91,7 +88,6 @@ func DumpGitRepositoryData(repoID string) (BackupSchema, error) {
 		}
 		fRows.Close()
 
-		// Puxa Arquivos Ignorados
 		iRows, err := db.Query("SELECT path FROM files_ignored WHERE tag_name = ?", tagName)
 		if err != nil {
 			return backup, fmt.Errorf("erro ao consultar arquivos ignorados da tag '%s': %w", tagName, err)
@@ -125,7 +121,6 @@ func RestoreGitRepositoryData(currentGitRoot string, backup BackupSchema) error 
 	}
 	defer tx.Rollback()
 
-	// Restaura Denylist
 	if len(backup.RepoDenylist) > 0 {
 		stmt, err := tx.Prepare("INSERT OR IGNORE INTO git_ignored (repo_id, path) VALUES (?, ?)")
 		if err != nil {
@@ -140,7 +135,6 @@ func RestoreGitRepositoryData(currentGitRoot string, backup BackupSchema) error 
 		stmt.Close()
 	}
 
-	// Restaura Tags
 	if len(backup.Tags) > 0 {
 		tagStmt, err := tx.Prepare("INSERT OR REPLACE INTO tags (name, type, repo_id, repo_name, git_root) VALUES (?, ?, ?, ?, ?)")
 		if err != nil {

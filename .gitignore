@@ -1,20 +1,18 @@
-# Binários Compilados
-# O nome do seu executável (baseado no seu 'module tae')
-tae
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
+```
+# Compiled and build artifacts
+*.o
+*.obj
+*.out
 
-# Pastas de Ferramentas e IDEs
-.idea/
-.vscode/
-*.swp
-*.swo
-
-# Arquivos de Log e Temporários
-*.log
-*.diff
-diff/
+# Dependencies
 vendor/
+
+# Logs and temp files
+*.log
+*.tmp
+
+# Environment
+.env
+.env.local
+*.env.*
+```

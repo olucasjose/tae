@@ -21,7 +21,6 @@ func RenameTag(oldName, newName string) error {
 	}
 	defer tx.Rollback()
 
-	// Validação Fail-Fast: O destino já existe?
 	var exists int
 	err = tx.QueryRow("SELECT 1 FROM tags WHERE name = ?", newName).Scan(&exists)
 	if err == nil {
@@ -30,7 +29,6 @@ func RenameTag(oldName, newName string) error {
 		return err
 	}
 
-	// O CASCADE cuidará de atualizar as tabelas files_tracked e files_ignored
 	res, err := tx.Exec("UPDATE tags SET name = ? WHERE name = ?", newName, oldName)
 	if err != nil {
 		return err

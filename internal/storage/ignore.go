@@ -46,11 +46,9 @@ func IgnorePaths(tagName string, targets []string) error {
 	defer insStmt.Close()
 
 	for _, path := range targets {
-		// Remove do rastreamento se estiver lá
 		if _, err := delStmt.Exec(tagName, path); err != nil {
 			return err
 		}
-		// Move para ignorados
 		if _, err := insStmt.Exec(tagName, path); err != nil {
 			return err
 		}

@@ -35,7 +35,6 @@ func getDBPath() (string, error) {
 }
 
 // GetDB retorna a instância global e thread-safe do pool de conexões do SQLite.
-// Substitui o antigo Open() para evitar o gargalo de I/O de múltiplas aberturas.
 func GetDB() (*sql.DB, error) {
 	dbOnce.Do(func() {
 		var dbPath string
@@ -44,8 +43,7 @@ func GetDB() (*sql.DB, error) {
 			return
 		}
 
-		// WAL melhora absurdamente a performance concorrente.
-		// busy_timeout impede falhas imediatas em locks.
+		// WAL melhora a performance concorrente.
 		dsn := fmt.Sprintf("%s?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)", dbPath)
 
 		dbInstance, dbErr = sql.Open("sqlite", dsn)
@@ -54,7 +52,7 @@ func GetDB() (*sql.DB, error) {
 			return
 		}
 
-		// Restringe o pool para evitar contenção de trava no nível de arquivo
+		// Restringe o pool para evitar contenção de trava no arquivo
 		dbInstance.SetMaxOpenConns(1)
 
 		if dbErr = dbInstance.Ping(); dbErr != nil {

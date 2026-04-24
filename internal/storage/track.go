@@ -8,7 +8,7 @@ import (
 	"fmt"
 )
 
-// TrackPaths recebe caminhos já processados pelo resolver e insere no rastreamento.
+// TrackPaths recebe caminhos já processados e insere no rastreamento.
 func TrackPaths(tagName string, targets []string) error {
 	db, err := GetDB()
 	if err != nil {
@@ -46,11 +46,9 @@ func TrackPaths(tagName string, targets []string) error {
 	defer insStmt.Close()
 
 	for _, path := range targets {
-		// Remove da denylist se estiver lá
 		if _, err := delStmt.Exec(tagName, path); err != nil {
 			return err
 		}
-		// Insere no rastreamento
 		if _, err := insStmt.Exec(tagName, path); err != nil {
 			return err
 		}

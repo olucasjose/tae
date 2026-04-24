@@ -21,7 +21,6 @@ type TagMeta struct {
 }
 
 // GetTagMeta recupera os metadados de uma tag.
-// Retorna fallback local se a tag não existir, mantendo o comportamento prévio.
 func GetTagMeta(tagName string) (TagMeta, error) {
 	db, err := GetDB()
 	if err != nil {
